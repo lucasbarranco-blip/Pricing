@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ganga Home · Calculadora de Precios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.22.0/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:        #080E1C;
+  --bg2:       #0E1829;
+  --card:      #111D30;
+  --card2:     #162240;
+  --row-alt:   rgba(255,255,255,0.025);
+  --bd:        rgba(255,255,255,0.07);
+  --bd2:       rgba(255,255,255,0.13);
+  --text:      #DDE4F0;
+  --text2:     #7B8DB5;
+  --text3:     #4A5878;
+  --accent:    #10B981;
+  --accent-d:  rgba(16,185,129,0.15);
+  --amber:     #F59E0B;
+  --amber-d:   rgba(245,158,11,0.12);
+  --red:       #F05252;
+  --red-d:     rgba(240,82,82,0.12);
+  --blue:      #60A5FA;
+  --blue-d:    rgba(96,165,250,0.12);
+  --purple:    #A78BFA;
+  --inp-bg:    #0E1829;
+  --radius:    8px;
+  --radius-lg: 12px;
+  --font:      'Inter', system-ui, sans-serif;
+  --mono:      'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── TOPBAR ── */
+#topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  overflow-x: auto;
+}
+.brand {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent);
+  white-space: nowrap;
+  padding: 14px 20px 14px 0;
+  border-right: 1px solid var(--bd);
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: -0.01em;
+}
+.tab-btn {
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── LAYOUT ── */
+#content { max-width: 1500px; margin: 0 auto; padding: 24px 20px; }
+
+/* ── CARD ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.card-sm { padding: 14px 16px; }
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-title i { font-size: 14px; color: var(--accent); }
+
+/* ── GRID ── */
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+
+/* ── METRIC CARD ── */
+.metric {
+  background: var(--card2);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.metric-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+.metric-val { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+
+/* ── TABLE ── */
+.tbl-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--bd); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { position: sticky; top: 51px; z-index: 2; }
+th {
+  background: var(--bg2);
+  padding: 9px 11px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+  border-bottom: 1px solid var(--bd2);
+  white-space: nowrap;
+  text-align: left;
+}
+th.r { text-align: right; }
+td {
+  padding: 8px 11px;
+  color: var(--text);
+  border-bottom: 1px solid var(--bd);
+  vertical-align: middle;
+  font-size: 13px;
+}
+td.r { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+td.mono { font-family: var(--mono); font-size: 12.5px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--row-alt); }
+
+/* ── STICKY COLUMN ── */
+td.sticky, th.sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg2);
+}
+tr:hover td.sticky { background: #162035; }
+
+/* ── FORM ELEMENTS ── */
+input[type=text], input[type=number], input[type=month], select, textarea {
+  background: var(--inp-bg);
+  border: 1px solid var(--bd2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+input[type=text]:focus, input[type=number]:focus, input[type=month]:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+}
+input[type=number] { font-family: var(--mono); }
+select { cursor: pointer; }
+.inp-sm { width: 90px !important; text-align: right; padding: 5px 7px; }
+.inp-md { width: 120px !important; }
+.inp-full { width: 100% !important; }
+.sel-xs { width: 60px !important; padding: 5px 4px; font-size: 12px; }
+.sel-sm { width: 130px !important; padding: 5px 7px; font-size: 12px; }
+.sel-md { width: 200px !important; }
+
+/* ── BUTTONS ── */
+button {
+  background: var(--card2);
+  border: 1px solid var(--bd2);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 7px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+button:hover { background: var(--card); border-color: var(--bd2); }
+button:active { transform: scale(.98); }
+button.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+button.btn-primary:hover { background: #0d9d70; }
+button.btn-danger { background: var(--red-d); border-color: var(--red); color: var(--red); }
+button.btn-icon { padding: 5px 7px; background: none; border: none; color: var(--text2); }
+button.btn-icon:hover { color: var(--red); background: var(--red-d); border-radius: 4px; }
+button.btn-export { background: var(--blue-d); border-color: var(--blue); color: var(--blue); }
+
+/* ── INFO BOX ── */
+.info-box {
+  background: var(--blue-d);
+  border: 1px solid rgba(96,165,250,.2);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #93c5fd;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.6;
+}
+.info-box i { flex-shrink: 0; margin-top: 1px; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+.badge-g { background: rgba(16,185,129,.15); color: #34d399; }
+.badge-a { background: rgba(245,158,11,.15); color: #fbbf24; }
+.badge-r { background: rgba(240,82,82,.15); color: #f87171; }
+
+/* ── P&L ROWS ── */
+.pl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bd);
+  font-size: 13px;
+  gap: 12px;
+}
+.pl-row:last-child { border-bottom: none; }
+.pl-row.indent { padding-left: 20px; color: var(--text2); }
+.pl-row.subtotal { font-weight: 600; background: rgba(255,255,255,.03); padding: 8px 12px; border-radius: 6px; margin: 4px 0; border: none; }
+.pl-row .pct { font-size: 11px; color: var(--text3); margin-left: 10px; font-family: var(--mono); }
+.pl-val { font-family: var(--mono); font-size: 13px; }
+
+/* ── WATERFALL BARS ── */
+.wf { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.wf-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.wf-lbl { width: 175px; color: var(--text2); text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-track { flex: 1; height: 16px; background: var(--bd); border-radius: 3px; overflow: hidden; }
+.wf-fill { height: 100%; border-radius: 3px; min-width: 3px; transition: width .3s; }
+.wf-num { width: 85px; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+/* ── HIST BARS ── */
+.hist-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin-top: 12px; }
+.hist-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hist-bar { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .7; transition: opacity .15s; }
+.hist-bar:hover { opacity: 1; }
+.hist-lbl { font-size: 9px; color: var(--text3); white-space: nowrap; }
+
+/* ── IMPORT PANEL ── */
+.import-panel {
+  background: var(--card2);
+  border: 1.5px dashed var(--bd2);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 14px;
+}
+.drop-zone {
+  border: 1.5px dashed var(--bd2);
+  border-radius: var(--radius);
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .15s;
+  font-size: 13px;
+}
+.drop-zone:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── HEADER ROW ── */
+.hdr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.hdr-row .card-title { margin-bottom: 0; }
+
+/* ── FLEX ROW ── */
+.flex-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lbl { font-size: 11px; color: var(--text2); display: block; margin-bottom: 3px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── SAVE INDICATOR ── */
+#save-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); opacity: 0;
+  transition: opacity .3s; margin-left: 6px;
+  display: inline-block; flex-shrink: 0;
+}
+
+/* ── COLORS ── */
+.c-g { color: #34d399; }
+.c-a { color: #fbbf24; }
+.c-r { color: #f87171; }
+.c-b { color: var(--blue); }
+.c-m { color: var(--text2); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .g2, .g3, .g4 { grid-template-columns: 1fr; }
+  #content { padding: 14px 10px; }
+}
+
+/* ── PRINT ── */
+@media print {
+  #topbar, button, .btn-icon, .import-panel { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { border: 1px solid #ddd; }
+  .tab-panel { display: block !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">
+    <i class="ti ti-home-2"></i>
+    Ganga Home · Pricing
+    <span id="save-dot"></span>
+  </div>
+  <button class="tab-btn active" id="t-prods"    onclick="go('prods')">   <i class="ti ti-package"></i>    Productos</button>
+  <button class="tab-btn"        id="t-ml"        onclick="go('ml')">      <i class="ti ti-tag"></i>         Cargos ML</button>
+  <button class="tab-btn"        id="t-cf"        onclick="go('cf')">      <i class="ti ti-building"></i>    Costos Fijos</button>
+  <button class="tab-btn"        id="t-pricing"   onclick="go('pricing')"> <i class="ti ti-calculator"></i>  Pricing &amp; P&amp;L</button>
+  <button class="tab-btn"        id="t-tn"        onclick="go('tn')">      <i class="ti ti-shopping-cart"></i> Tienda Nube</button>
+</div>
+
+<div id="content">
+  <div id="tab-prods"   class="tab-panel"></div>
+  <div id="tab-ml"      class="tab-panel" style="display:none"></div>
+  <div id="tab-cf"      class="tab-panel" style="display:none"></div>
+  <div id="tab-pricing" class="tab-panel" style="display:none"></div>
+  <div id="tab-tn"      class="tab-panel" style="display:none"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════════ */
+const DEF_CATS = [
+  {id:1,  n:'Ropa de Cama / Textiles Hogar',    c:16.0,  p:17.14},
+  {id:2,  n:'Cortinas y Persianas',              c:14.0,  p:17.14},
+  {id:3,  n:'Toallas / Accesorios Baño',         c:14.0,  p:17.14},
+  {id:4,  n:'Alfombras y Tapetes',               c:14.0,  p:17.14},
+  {id:5,  n:'Almohadas y Rellenos',              c:14.0,  p:17.14},
+  {id:6,  n:'Mantas / Edredones / Acolchados',   c:14.0,  p:17.14},
+  {id:7,  n:'Decoración del Hogar',              c:14.0,  p:17.14},
+  {id:8,  n:'Computación',                       c:15.0,  p:17.14},
+  {id:9,  n:'Electrónica / Audio / Video',       c:15.0,  p:17.14},
+  {id:10, n:'Indumentaria / Calzado',            c:16.0,  p:17.14},
+  {id:11, n:'Electrodomésticos',                 c:11.8,  p:14.80},
+  {id:12, n:'Deportes y Fitness',                c:14.0,  p:17.14},
+  {id:13, n:'Herramientas / Construcción',       c:13.0,  p:16.50},
+  {id:14, n:'Bebés y Niños',                     c:13.0,  p:16.50},
+  {id:15, n:'Supermercado / Alimentos',          c:11.8,  p:14.80},
+];
+const DEF_TIERS = [
+  {id:1, label:'Hasta $15.000',      min:0,     max:15000,     costo:1095},
+  {id:2, label:'$15.001 – $25.000',  min:15001, max:25000,     costo:2190},
+  {id:3, label:'$25.001 – $33.000',  min:25001, max:33000,     costo:2628},
+  {id:4, label:'Más de $33.000',     min:33001, max:999999999, costo:0},
+];
+const DEF_INST  = {'1':0,'3':5.75,'6':10.75,'12':20.50};
+const CF_FIELDS = [
+  {k:'oficina',          l:'Alquiler / Oficina'},
+  {k:'sueldosAdmin',     l:'Sueldos Administrativos'},
+  {k:'sueldosLogistica', l:'Sueldos Logística'},
+  {k:'gastosTransporte', l:'Gastos Transporte'},
+  {k:'gastosWarehouse',  l:'Gastos Warehouse / Depósito'},
+  {k:'insumos',          l:'Insumos / Embalajes'},
+  {k:'publicidad',       l:'Publicidad (ADS, Meta, etc.)'},
+  {k:'percepciones',     l:'Percepciones IIBB / AFIP'},
+  {k:'retenciones',      l:'Retenciones IIBB / AFIP'},
+  {k:'multasFull',       l:'Multas / Cargos Full ML'},
+  {k:'otrosGastos',      l:'Otros Gastos'},
+];
+const MONTH_NAMES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTH_SHORT = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+const S = {
+  tab: 'prods',
+  prods: [
+    {id:1, sku:'SET-CAM-180',  titulo:'Set Sábanas 2 Plazas Algodón 180h', costoSinIva:23140, ivaR:21, costoConIva:28000, defCatId:1},
+    {id:2, sku:'ALM-FUND-P2',  titulo:'Funda Almohada Pack x2 50x70cm',   costoSinIva:3719,  ivaR:21, costoConIva:4500,  defCatId:3},
+    {id:3, sku:'EDT-2P-MF200', titulo:'Edredón 2 Plazas Microfibra 200g', costoSinIva:37190, ivaR:21, costoConIva:45000, defCatId:6},
+  ],
+  cats:    [...DEF_CATS],
+  tiers:   [...DEF_TIERS],
+  inst:    {...DEF_INST},
+  ivaML:   21,
+  monthly: {},
+  pConf:   {},
+  tn:      {},
+  selMonth: '',
+  targetMargin: 20,
+  nextId:  4,
+  importState: null,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════════ */
+const nv = (v, d=0) => { const x = parseFloat(v); return isNaN(x) ? d : x; };
+
+const fARS = (v, showSign=false) => {
+  if (v === null || v === undefined || isNaN(v)) return '–';
+  const abs = new Intl.NumberFormat('es-AR',{maximumFractionDigits:0}).format(Math.abs(v));
+  if (v < 0) return `<span class="c-r">($${abs})</span>`;
+  return (showSign && v > 0 ? '+' : '') + `$${abs}`;
+};
+const fARSraw = (v) => {
+  if (!v && v !== 0) return '';
+  return new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(v);
+};
+const fPct = (v, d=1) => (v === null || v === undefined || isNaN(v)) ? '–' : `${v.toFixed(d)}%`;
+
+const badge = (pct) => {
+  if (isNaN(pct) || pct === null) return '–';
+  const cls = pct >= 15 ? 'badge-g' : pct >= 8 ? 'badge-a' : 'badge-r';
+  return `<span class="badge ${cls}">${fPct(pct)}</span>`;
+};
+const mColor = (pct) => pct >= 15 ? 'c-g' : pct >= 8 ? 'c-a' : 'c-r';
+
+const nowM = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const prevM = k => { const [y,m]=k.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const nextM = k => { const [y,m]=k.split('-').map(Number); const d=new Date(y,m,1);   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const mLabel  = k => { if (!k) return ''; const [y,m]=k.split('-'); return `${MONTH_NAMES[+m]} ${y}`; };
+const mLabelS = k => { if (!k) return ''; const [y,m]=k.split('-'); return `${MONTH_SHORT[+m]} ${y}`; };
+
+const getCFml = (pvp, tiers) => {
+  for (const t of tiers) if (pvp >= t.min && pvp <= t.max) return t.costo;
+  return 0;
+};
+
+const calcP = ({costoConIva, pvp, commRate, ivaML=21, instRate=0, ship=0, estruct=0}) => {
+  if (!pvp || pvp <= 0) return null;
+  const iv = ivaML / 100;
+  const comm   = pvp * (commRate  / 100) * (1 + iv);
+  const fxBase = getCFml(pvp, S.tiers);
+  const fx     = fxBase * (1 + iv);
+  const inst   = pvp * (instRate / 100) * (1 + iv);
+  const dc     = pvp * 0.006;
+  const iibb   = pvp * 0.05;
+  const mlFees = comm + fx + inst;
+  const taxes  = dc + iibb;
+  const total  = nv(costoConIva) + mlFees + nv(ship) + taxes + nv(estruct);
+  const m$     = pvp - total;
+  const mPct   = pvp > 0 ? (m$ / pvp) * 100 : 0;
+  return { comm, fx, fxBase, inst, dc, iibb, mlFees, taxes, total, m$, mPct };
+};
+
+const calcSuggest = ({costoConIva, commRate, ivaML=21, instRate=0, ship=0, estruct=0, target=20}) => {
+  const iv = 1 + ivaML / 100;
+  const m  = target / 100;
+  let f = 0, pvp = 0;
+  for (let i = 0; i < 6; i++) {
+    const den = 1 - (commRate / 100) * iv - (instRate / 100) * iv - 0.006 - 0.05 - m;
+    if (den <= 0) return null;
+    pvp = (nv(costoConIva) + f * iv + nv(ship) + nv(estruct)) / den;
+    f = getCFml(pvp, S.tiers);
+  }
+  return Math.ceil(pvp / 100) * 100;
+};
+
+const getEstruct = (monthKey) => {
+  const m = S.monthly[monthKey] || {};
+  const tot = CF_FIELDS.reduce((s, f) => s + nv(m[f.k]), 0);
+  const u = nv(m.unidades, 1);
+  return u > 0 ? tot / u : 0;
+};
+
+const getPConf = (sku, prod) => {
+  const c = S.pConf[sku] || {};
+  const defCat = S.cats.find(x => x.id === (prod?.defCatId || 1)) || S.cats[0];
+  const catId  = c.catId || defCat.id;
+  const cat    = S.cats.find(x => x.id === catId) || S.cats[0];
+  return { pvp: nv(c.pvp,0), catId, cat, tipo: c.tipo||'p', cuotas: c.cuotas||1, ship: nv(c.ship,0), units: nv(c.units,0) };
+};
+
+/* ═══════════════════════════════════════════════════════════
+   STORAGE (localStorage)
+═══════════════════════════════════════════════════════════ */
+let _saveTimer;
+const ls = {
+  get: (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const save = (k, v) => {
+  ls.set(k, v);
+  const dot = document.getElementById('save-dot');
+  if (dot) { dot.style.opacity = '1'; clearTimeout(_saveTimer); _saveTimer = setTimeout(() => dot.style.opacity='0', 800); }
+};
+const saveAll = () => {
+  save('gh_prods',   S.prods);
+  save('gh_cats',    S.cats);
+  save('gh_tiers',   S.tiers);
+  save('gh_inst',    S.inst);
+  save('gh_ivaML',   S.ivaML);
+  save('gh_monthly', S.monthly);
+  save('gh_pconf',   S.pConf);
+  save('gh_tn',      S.tn);
+  save('gh_nextId',  S.nextId);
+};
+
+/* ═══════════════════════════════════════════════════════════
+   TAB NAVIGATION
+═══════════════════════════════════════════════════════════ */
+const TABS = ['prods','ml','cf','pricing','tn'];
+function go(t) {
+  TABS.forEach(id => {
+    document.getElementById('tab-' + id).style.display = id === t ? 'block' : 'none';
+    document.getElementById('t-' + id).classList.toggle('active', id === t);
+  });
+  S.tab = t;
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: PRODUCTOS
+═══════════════════════════════════════════════════════════ */
+function renderProds() {
+  const el = document.getElementById('tab-prods');
+
+  const rows = S.prods.map(p => {
+    const catOpts = S.cats.map(c => `<option value="${c.id}" ${c.id===p.defCatId?'selected':''}>${c.n}</option>`).join('');
+    return `<tr>
+      <td class="sticky mono"><input type="text" value="${esc(p.sku)}" class="inp-sm inp-md" onchange="uProd(${p.id},'sku',this.value)"></td>
+      <td><input type="text" value="${esc(p.titulo)}" style="min-width:220px;width:100%" onchange="uProd(${p.id},'titulo',this.value)"></td>
+      <td class="r"><input type="number" value="${p.costoSinIva}" class="inp-sm" onchange="uProdCosto(${p.id},this.value,'sin')"></td>
+      <td class="r"><input type="number" value="${p.ivaR}" class="inp-sm" style="width:55px" onchange="uProd(${p.id},'ivaR',+this.value);recIva(${p.id})">%</td>
+      <td class="r"><input type="number" value="${p.costoConIva}" class="inp-sm" onchange="uProdCosto(${p.id},this.value,'con')"></td>
+      <td><select class="sel-sm" onchange="uProd(${p.id},'defCatId',+this.value)">${catOpts}</select></td>
+      <td style="text-align:center"><button class="btn-icon" onclick="delProd(${p.id})" title="Eliminar"><i class="ti ti-trash" style="font-size:14px"></i></button></td>
+    </tr>`;
+  }).join('');
+
+  let importHtml = '';
+  if (S.importState) {
+    const {headers, rows: irows, colMap} = S.importState;
+    const opts  = headers.map((h,i) => `<option value="${i}">${h}</option>`).join('');
+    const optsN = `<option value="-1">— no usar —</option>` + opts;
+    const preview = irows.slice(0,5).map(r => `<tr>${headers.map((_,i)=>`<td>${esc(String(r[i]??''))}</td>`).join('')}</tr>`).join('');
+    importHtml = `
+    <div class="import-panel">
+      <div class="card-title"><i class="ti ti-columns"></i> Mapear columnas — ${irows.length} filas detectadas</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+        <div><label class="lbl">SKU *</label><select class="inp-full" onchange="S.importState.colMap.sku=+this.value">${opts}</select></div>
+        <div><label class="lbl">Título *</label><select class="inp-full" onchange="S.importState.colMap.titulo=+this.value">${opts}</select></div>
+        <div><label class="lbl">Costo c/ IVA</label><select class="inp-full" onchange="S.importState.colMap.civa=+this.value">${optsN}</select></div>
+        <div><label class="lbl">Costo s/ IVA</label><select class="inp-full" onchange="S.importState.colMap.siva=+this.value">${optsN}</select></div>
+        <div><label class="lbl">% IVA</label><select class="inp-full" onchange="S.importState.colMap.ivar=+this.value">${optsN}</select></div>
+      </div>
+      <div class="flex-row">
+        <button class="btn-primary" onclick="confirmImport()"><i class="ti ti-check"></i> Confirmar importación</button>
+        <button onclick="S.importState=null;renderProds()"><i class="ti ti-x"></i> Cancelar</button>
+      </div>
+      <div style="overflow-x:auto;max-height:140px;overflow-y:auto;margin-top:12px;border:1px solid var(--bd);border-radius:6px">
+        <table style="font-size:11px"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${preview}</tbody></table>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = `
+  <div class="card">
+    <div class="hdr-row">
+      <div class="card-title"><i class="ti ti-package"></i> Catálogo de productos (${S.prods.length})</div>
+      <div class="flex-row">
+        <label style="cursor:pointer">
+          <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)">
+          <button onclick="this.previousElementSibling.click()"><i class="ti ti-upload"></i> Importar Excel</button>
+        </label>
+        <button class="btn-primary" onclick="addProd()"><i class="ti ti-plus"></i> Agregar fila</button>
+        <button class="btn-export" onclick="exportProds()"><i class="ti ti-download"></i> Exportar</button>
+      </div>
+    </div>
+    <div class="info-box"><i class="ti ti-info-circle"></i>
+      Podés ingresar el costo con IVA y el sistema calcula el neto, o al revés. Para importar: subí un Excel y mapeá las columnas. Los costos se usan en la pestaña Pricing.
+    </div>
+    ${importHtml}
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th class="sticky">SKU</th>
+          <th>Título / Descripción</th>
+          <th class="r">Costo s/IVA</th>
+          <th class="r">IVA %</th>
+          <th class="r">Costo c/IVA</th>
+          <th>Categoría ML (default)</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">Sin productos. Importá un Excel o agregá filas manualmente.</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: CARGOS ML
+═══════════════════════════════════════════════════════════ */
+function renderML() {
+  const el = document.getElementById('tab-ml');
+
+  const catRows = S.cats.map(c => `<tr>
+    <td class="c-m" style="font-size:11px">${c.id}</td>
+    <td><input type="text" value="${esc(c.n)}" style="min-width:240px;width:100%" onchange="uCat(${c.id},'n',this.value)"></td>
+    <td class="r"><input type="number" value="${c.c}" class="inp-sm" step="0.01" onchange="uCat(${c.id},'c',+this.value)">%</td>
+    <td class="r"><input type="number" value="${c.p}" class="inp-sm" step="0.01" onchange="uCat(${c.id},'p',+this.value)">%</td>
+    <td style="text-align:center"><button class="btn-icon" onclick="delCat(${c.id})"><i class="ti ti-trash" style="font-size:13px"></i></button></td>
+  </tr>`).join('');
+
+  const tierRows = S.tiers.map(t => `<tr>
+    <td><input type="text" value="${esc(t.label)}" style="width:180px" onchange="uTier(${t.id},'label',this.value)"></td>
+    <td class="r"><input type="number" value="${t.min}" class="inp-sm" onchange="uTier(${t.id},'min',+this.value)"></td>
+    <td class="r"><input type="number" value="${t.max===999999999?'':t.max}" class="inp-sm" placeholder="∞" onchange="uTier(${t.id},'max',this.value===''?999999999:+this.value)"></td>
+    <td class="r"><input type="number" value="${t.costo}" class="inp-sm" onchange="uTier(${t.id},'costo',+this.value)"></td>
+  </tr>`).join('');
+
+  const instRows = [1,3,6,12].map(q => `<tr>
+    <td>${q===1 ? 'Sin cuotas' : q + ' cuotas sin interés'}</td>
+    <td class="r"><input type="number" value="${S.inst[q]}" class="inp-sm" step="0.01" onchange="S.inst[${q}]=+this.value;save('gh_inst',S.inst)">%</td>
+    <td class="r c-m">${fPct(nv(S.inst[q]) * (1 + S.ivaML/100))}</td>
+    <td class="c-m" style="font-size:11px">${q===1 ? '—' : 'CVFN +21% IVA'}</td>
+  </tr>`).join('');
+
+  el.innerHTML = `
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-tag"></i> Comisiones por categoría — 2026</div>
+        <div class="info-box"><i class="ti ti-info-circle"></i>
+          Fuente: ML Argentina. Rango 11.8%–17.14% según categoría y provincia. Actualizá según tu cuenta real. Se aplica 21% IVA sobre todos los cargos (configurable abajo).
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Categoría</th><th class="r">Clásica</th><th class="r">Premium</th><th></th></tr></thead>
+            <tbody>${catRows}</tbody>
+          </table>
+        </div>
+        <button style="margin-top:10px" onclick="addCat()"><i class="ti ti-plus"></i> Agregar categoría</button>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-coins"></i> Cargo fijo por unidad vendida</div>
+        <div class="info-box"><i class="ti ti-info-circle"></i>
+          Para productos con PVP inferior a $33.000. Aplica IVA sobre este cargo. Valores de referencia 2H 2025. Actualizalos según las liquidaciones reales.
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Rango</th><th class="r">Desde</th><th class="r">Hasta</th><th class="r">Cargo fijo ($)</th></tr></thead>
+            <tbody>${tierRows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-percentage"></i> Cuotas sin interés (CVFN)</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Cuotas</th><th class="r">Base %</th><th class="r">c/IVA efectivo</th><th>Concepto</th></tr></thead>
+            <tbody>${instRows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-sm">
+        <div class="card-title"><i class="ti ti-receipt"></i> IVA sobre cargos ML</div>
+        <div class="flex-row">
+          <span style="font-size:13px;color:var(--text2)">IVA aplicado a comisiones, cargos fijos y cuotas:</span>
+          <input type="number" value="${S.ivaML}" style="width:65px" onchange="S.ivaML=+this.value;save('gh_ivaML',S.ivaML)">%
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:8px">Si sos RI: el IVA sobre comisiones es crédito fiscal. Monotributista: es costo real.</p>
+      </div>
+      <div class="card card-sm">
+        <div class="card-title"><i class="ti ti-truck"></i> Notas — Envíos, retenciones y Full</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <b style="color:var(--text)">Retenciones AFIP:</b> ML retiene IVA (~1–3%) y Ganancias (~3%) por pago recibido. Se compensan.<br>
+          <b style="color:var(--text)">Percepciones IIBB:</b> Por provincia (CABA ~1%, Bs.As. ~3%). Cargalos en Costos Fijos.<br>
+          <b style="color:var(--text)">Full ML:</b> Storage gratuito primeros 60 días, luego por m³/día. Multas en Costos Fijos.<br>
+          <b style="color:var(--text)">Envío gratis:</b> ML subsidia parte según reputación y peso del paquete. Cargá el neto en Pricing.
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: COSTOS FIJOS
+═══════════════════════════════════════════════════════════ */
+function renderCF() {
+  const el  = document.getElementById('tab-cf');
+  const m   = S.selMonth;
+  const d   = S.monthly[m] || {};
+  const tot = CF_FIELDS.reduce((s, f) => s + nv(d[f.k]), 0);
+  const u   = nv(d.unidades, 1);
+  const est = u > 0 ? tot / u : 0;
+
+  const fieldRows = CF_FIELDS.map(f => {
+    const v = nv(d[f.k]);
+    const pct = tot > 0 ? (v / tot * 100) : 0;
+    return `<tr>
+      <td>${f.l}</td>
+      <td class="r"><input type="number" value="${d[f.k]||''}" class="inp-sm" style="width:140px" placeholder="0" onchange="uCF('${f.k}',this.value)"></td>
+      <td class="r c-m" style="font-size:11px">${v > 0 ? fPct(pct,0) : ''}</td>
+      <td style="padding-left:4px">
+        ${v > 0 ? `<div style="height:4px;width:${Math.round(pct)}%;background:var(--accent);opacity:.6;border-radius:2px;min-width:2px"></div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Historical data
+  const sortedKeys = Object.keys(S.monthly).sort();
+  const maxTot = Math.max(1, ...sortedKeys.map(k => CF_FIELDS.reduce((s,f) => s+nv((S.monthly[k]||{})[f.k]),0)));
+
+  const histBars = sortedKeys.slice(-12).map(k => {
+    const v = CF_FIELDS.reduce((s,f) => s+nv((S.monthly[k]||{})[f.k]),0);
+    const h = Math.round(v/maxTot*72);
+    return `<div class="hist-bar-col" title="${mLabel(k)}: ${fARSraw(v)}">
+      <div class="hist-bar" style="height:${h}px;${k===m?'opacity:1;background:var(--accent)':''}"></div>
+      <div class="hist-lbl">${mLabelS(k)}</div>
+    </div>`;
+  }).join('');
+
+  const histRows = sortedKeys.map(k => {
+    const md = S.monthly[k] || {};
+    const v = CF_FIELDS.reduce((s,f) => s+nv(md[f.k]),0);
+    const units = nv(md.unidades,1);
+    return `<tr style="${k===m?'background:var(--accent-d)':''}">
+      <td>${mLabel(k)}</td>
+      <td class="r">${fARS(v)}</td>
+      <td class="r">${units}</td>
+      <td class="r c-b">${fARS(units>0?v/units:0)}</td>
+      <td style="font-size:11px;color:var(--text3)">${md.notas||''}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="hdr-row">
+          <div class="card-title" style="margin:0"><i class="ti ti-building"></i> Costos fijos — ${mLabel(m) || 'sin mes'}</div>
+          <div class="flex-row">
+            <button class="btn-icon" onclick="S.selMonth=prevM(S.selMonth);renderCF()" title="Mes anterior"><i class="ti ti-chevron-left"></i></button>
+            <input type="month" value="${m}" onchange="S.selMonth=this.value;renderCF()">
+            <button class="btn-icon" onclick="S.selMonth=nextM(S.selMonth);renderCF()" title="Mes siguiente"><i class="ti ti-chevron-right"></i></button>
+          </div>
+        </div>
+        <div class="tbl-wrap" style="margin-top:14px">
+          <table>
+            <thead><tr><th>Concepto</th><th class="r">Monto ($)</th><th class="r">%</th><th style="width:80px">Prop.</th></tr></thead>
+            <tbody>${fieldRows}
+              <tr style="background:var(--card2)">
+                <td><b>TOTAL COSTOS FIJOS</b></td>
+                <td class="r"><b>${fARS(tot)}</b></td>
+                <td class="r"><b>100%</b></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="g2" style="margin-top:14px">
+          <div>
+            <label class="lbl">Unidades vendidas en el mes</label>
+            <input type="number" value="${d.unidades||''}" placeholder="ej. 150" onchange="uCF('unidades',this.value)">
+          </div>
+          <div>
+            <label class="lbl">Notas del mes</label>
+            <input type="text" value="${esc(d.notas||'')}" placeholder="Observaciones..." onchange="uCF('notas',this.value)">
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-calculator"></i> Costo estructural por unidad — ${mLabel(m)}</div>
+        <div class="g2">
+          <div class="metric">
+            <div class="metric-label">Total costos fijos</div>
+            <div class="metric-val">${fARS(tot)}</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Costo / unidad vendida</div>
+            <div class="metric-val c-b">${fARS(est)}</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:10px">
+          Este costo estructural se aplica automáticamente en Pricing al mes de referencia seleccionado.
+        </p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-chart-bar"></i> Histórico de costos fijos</div>
+        ${sortedKeys.length === 0
+          ? '<div style="text-align:center;padding:24px;color:var(--text3)">Sin datos históricos.</div>'
+          : `<div class="hist-bars">${histBars}</div>
+             <div class="tbl-wrap" style="margin-top:14px">
+               <table>
+                 <thead><tr><th>Mes</th><th class="r">Total CF</th><th class="r">Unidades</th><th class="r">Estructural/u</th><th>Notas</th></tr></thead>
+                 <tbody>${histRows}</tbody>
+               </table>
+             </div>`
+        }
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: PRICING & P&L
+═══════════════════════════════════════════════════════════ */
+function renderPricing() {
+  const el     = document.getElementById('tab-pricing');
+  const estruct = getEstruct(S.selMonth);
+
+  // Build table rows
+  const rows = S.prods.map(prod => {
+    const conf     = getPConf(prod.sku, prod);
+    const cat      = conf.cat;
+    const commRate = conf.tipo === 'p' ? cat.p : cat.c;
+    const instRate = nv(S.inst[conf.cuotas], 0);
+    const r        = calcP({costoConIva:prod.costoConIva, pvp:conf.pvp, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct});
+    const sug      = !conf.pvp ? calcSuggest({costoConIva:prod.costoConIva, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct, target:S.targetMargin}) : null;
+    const catOpts  = S.cats.map(c => `<option value="${c.id}" ${c.id===conf.catId?'selected':''}>${c.n}</option>`).join('');
+    const mRow     = r ? mColor(r.mPct) : '';
+    return `<tr>
+      <td class="sticky mono">${esc(prod.sku)}</td>
+      <td style="min-width:160px">${esc(prod.titulo)}</td>
+      <td><select class="sel-xs" title="Publicación" onchange="uPConf('${esc(prod.sku)}','tipo',this.value)"><option value="p" ${conf.tipo==='p'?'selected':''}>P</option><option value="c" ${conf.tipo==='c'?'selected':''}>C</option></select></td>
+      <td><select class="sel-xs" style="width:50px" title="Cuotas" onchange="uPConf('${esc(prod.sku)}','cuotas',+this.value)"><option value="1" ${conf.cuotas==1?'selected':''}>1</option><option value="3" ${conf.cuotas==3?'selected':''}>3</option><option value="6" ${conf.cuotas==6?'selected':''}>6</option><option value="12" ${conf.cuotas==12?'selected':''}>12</option></select></td>
+      <td><select class="sel-sm" onchange="uPConf('${esc(prod.sku)}','catId',+this.value)">${catOpts}</select></td>
+      <td class="r" style="background:var(--blue-d)"><input type="number" value="${conf.pvp||''}" class="inp-sm" style="width:105px;background:transparent;border-color:rgba(96,165,250,.3)" placeholder="Ingresá PVP" onchange="uPConf('${esc(prod.sku)}','pvp',+this.value)"></td>
+      <td class="r"><input type="number" value="${conf.ship||''}" class="inp-sm" style="width:80px" placeholder="0" onchange="uPConf('${esc(prod.sku)}','ship',+this.value)"></td>
+      <td class="r"><input type="number" value="${conf.units||''}" class="inp-sm" style="width:65px" placeholder="0" onchange="uPConf('${esc(prod.sku)}','units',+this.value)"></td>
+      <td class="r c-m">${fARS(prod.costoConIva)}</td>
+      <td class="r c-m">${r ? fARS(r.comm) : '–'}</td>
+      <td class="r c-m">${r && r.fxBase > 0 ? fARS(r.fx) : '–'}</td>
+      <td class="r c-m">${r && conf.cuotas > 1 ? fARS(r.inst) : '–'}</td>
+      <td class="r c-m">${r ? fARS(r.dc + r.iibb) : '–'}</td>
+      <td class="r c-m">${estruct > 0 ? fARS(estruct) : '–'}</td>
+      <td class="r"><b>${r ? fARS(r.total) : '–'}</b></td>
+      <td class="r ${mRow}" style="font-weight:600">${r ? fARS(r.m$) : '–'}</td>
+      <td class="r">${r ? badge(r.mPct) : '–'}</td>
+      <td class="r c-b">${sug ? fARS(sug) : conf.pvp ? '–' : '<span style="color:var(--text3);font-size:11px">ingresá PVP</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  // P&L aggregation
+  let totRev=0,totCogs=0,totComm=0,totFx=0,totInst=0,totShip=0,totDC=0,totIIBB=0,totEst=0,totU=0;
+  S.prods.forEach(prod => {
+    const conf     = getPConf(prod.sku, prod);
+    const commRate = conf.tipo==='p' ? conf.cat.p : conf.cat.c;
+    const instRate = nv(S.inst[conf.cuotas], 0);
+    const r        = calcP({costoConIva:prod.costoConIva, pvp:conf.pvp, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct});
+    const u        = nv(conf.units, 0);
+    if (r && conf.pvp > 0 && u > 0) {
+      totRev  += conf.pvp * u; totCogs += nv(prod.costoConIva) * u;
+      totComm += r.comm * u;   totFx   += r.fx * u;
+      totInst += r.inst * u;   totShip += conf.ship * u;
+      totDC   += r.dc * u;     totIIBB += r.iibb * u;
+      totEst  += estruct * u;  totU    += u;
+    }
+  });
+  const totGross    = totRev - totCogs;
+  const totAfterML  = totGross - totComm - totFx - totInst - totShip;
+  const totAfterTax = totAfterML - totDC - totIIBB;
+  const totFixedM   = CF_FIELDS.reduce((s,f) => s+nv((S.monthly[S.selMonth]||{})[f.k]), 0);
+  const totNet      = totAfterTax - totFixedM;
+  const hasPL       = totRev > 0 && totU > 0;
+
+  const plr = (lbl, val, opts={}) => {
+    const {sub=false, total=false, sep=false} = opts;
+    if (sep) return `<div style="height:1px;background:var(--bd2);margin:4px 0"></div>`;
+    const pct   = totRev > 0 ? fPct(val/totRev*100) : '';
+    const vHtml = fARS(val);
+    const cls   = total ? 'subtotal' : sub ? 'indent' : '';
+    const style = !sub && !total ? 'font-weight:500' : '';
+    return `<div class="pl-row ${cls}" style="${style}">
+      <span>${lbl}</span>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="pl-val">${vHtml}</span>
+        <span class="pct">${pct}</span>
+      </div>
+    </div>`;
+  };
+
+  // Waterfall
+  const pvpAvg = totU > 0 ? totRev / totU : 0;
+  const wfItems = [
+    {l:'Costo de producto', v:totCogs/Math.max(totU,1), col:'#3B82F6'},
+    {l:'Comisión ML',       v:totComm/Math.max(totU,1), col:'#8B5CF6'},
+    {l:'Cargo fijo ML',    v:totFx/Math.max(totU,1),   col:'#A855F7'},
+    {l:'Cuotas',           v:totInst/Math.max(totU,1), col:'#C084FC'},
+    {l:'Envío',            v:totShip/Math.max(totU,1), col:'#6B7280'},
+    {l:'Impuestos',        v:(totDC+totIIBB)/Math.max(totU,1), col:'#F59E0B'},
+    {l:'Costos fijos/u',   v:totEst/Math.max(totU,1), col:'#EF4444'},
+    {l:'Margen neto/u',    v:totNet/Math.max(totU,1), col:'#10B981'},
+  ].filter(x => x.v > 0.5);
+  const wfMax = Math.max(pvpAvg, ...wfItems.map(x=>Math.abs(x.v)));
+
+  el.innerHTML = `
+  <div class="card">
+    <div class="hdr-row">
+      <div class="card-title" style="margin:0"><i class="ti ti-calculator"></i> Pricing por SKU</div>
+      <div class="flex-row">
+        <span class="lbl" style="margin:0;white-space:nowrap">Mes ref.:</span>
+        <input type="month" value="${S.selMonth}" style="width:160px" onchange="S.selMonth=this.value;renderPricing()">
+        <span style="font-size:11px;color:var(--text2)">Estructural: <b class="c-b">${fARS(estruct)}</b>/u</span>
+        <span class="lbl" style="margin:0">Margen target:</span>
+        <input type="number" value="${S.targetMargin}" style="width:60px" onchange="S.targetMargin=+this.value;renderPricing()">%
+        <button class="btn-export" onclick="exportPricing()"><i class="ti ti-download"></i> Exportar</button>
+      </div>
+    </div>
+    <div class="info-box"><i class="ti ti-info-circle"></i>
+      <b>P</b>=Premium · <b>C</b>=Clásica · <b>1/3/6/12</b>=cuotas · Ingresá el PVP o dejalo vacío para ver el precio sugerido al margen target.
+      Imp. = Déb/Créd 0.6% + IIBB 5% del PVP.
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sticky">SKU</th><th>Título</th>
+            <th title="Tipo publicación">Pub</th><th title="Cuotas">Ctas</th>
+            <th>Categoría ML</th>
+            <th class="r" style="background:var(--blue-d);color:var(--blue)">PVP ✎</th>
+            <th class="r">Envío</th><th class="r">Uni/Mes</th>
+            <th class="r" style="border-left:1px solid var(--bd2)">Costo</th>
+            <th class="r">Com.ML</th><th class="r">CF ML</th>
+            <th class="r">Cuotas$</th><th class="r">Imp.</th><th class="r">Estruct.</th>
+            <th class="r" style="border-left:1px solid var(--bd2)">Total</th>
+            <th class="r" style="color:#34d399">Margen $</th>
+            <th class="r">Margen %</th>
+            <th class="r" style="color:var(--blue)">PVP Sug.</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="18" style="text-align:center;padding:30px;color:var(--text3)">Sin productos. Cargalos en la pestaña Productos.</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-title"><i class="ti ti-report-money"></i> Estado de resultados — ${mLabel(S.selMonth) || 'mes actual'}</div>
+      ${!hasPL
+        ? `<div style="text-align:center;padding:30px;color:var(--text3)">Completá PVP y unidades/mes por producto para ver el P&L consolidado.</div>`
+        : `<div>
+            ${plr('(+) Ingresos por ventas', totRev)}
+            ${plr('(−) Costo de mercadería (c/IVA)', -totCogs, {sub:true})}
+            ${plr('= Ganancia bruta', totGross, {total:true})}
+            ${plr('',0,{sep:true})}
+            ${plr('(−) Comisión ML (c/IVA 21%)', -totComm, {sub:true})}
+            ${plr('(−) Cargo fijo ML (c/IVA)', -totFx, {sub:true})}
+            ${plr('(−) Cuotas sin interés (c/IVA)', -totInst, {sub:true})}
+            ${plr('(−) Costos de envío', -totShip, {sub:true})}
+            ${plr('= Margen después de ML', totAfterML, {total:true})}
+            ${plr('',0,{sep:true})}
+            ${plr('(−) Imp. Débito/Crédito (0.6% PVP)', -totDC, {sub:true})}
+            ${plr('(−) IIBB + Imp. Provinciales (5% PVP)', -totIIBB, {sub:true})}
+            ${plr('= Margen después de impuestos', totAfterTax, {total:true})}
+            ${plr('',0,{sep:true})}
+            ${totFixedM > 0 ? plr('(−) Costos fijos del mes', -totFixedM, {sub:true}) : ''}
+            ${plr('= Resultado neto operativo', totNet, {total:true})}
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--text3)">
+            Basado en <b>${totU}</b> unidades · Costos fijos mes: <b>${fARS(totFixedM)}</b>
+          </div>`
+      }
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-chart-donut-3"></i> Composición del costo por unidad promedio</div>
+      ${!hasPL
+        ? `<div style="text-align:center;padding:30px;color:var(--text3)">Sin datos suficientes.</div>`
+        : `<div class="wf">
+            ${wfItems.map(it => `
+              <div class="wf-row">
+                <div class="wf-lbl">${it.l}</div>
+                <div class="wf-track">
+                  <div class="wf-fill" style="width:${Math.max(0,Math.round(Math.abs(it.v)/wfMax*100))}%;background:${it.col}"></div>
+                </div>
+                <div class="wf-num">${fARSraw(it.v)}</div>
+              </div>`).join('')}
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text3)">PVP promedio: <b>${fARSraw(pvpAvg)}</b></div>`
+      }
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: TIENDA NUBE
+═══════════════════════════════════════════════════════════ */
+function renderTN() {
+  const el      = document.getElementById('tab-tn');
+  const estruct = getEstruct(S.selMonth);
+
+  const rows = S.prods.map(prod => {
+    const conf     = getPConf(prod.sku, prod);
+    const tnData   = S.tn[prod.sku] || {};
+    const commRate = conf.tipo==='p' ? conf.cat.p : conf.cat.c;
+    const instRate = nv(S.inst[conf.cuotas], 0);
+    const r        = calcP({costoConIva:prod.costoConIva, pvp:conf.pvp, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct});
+    const lista    = nv(tnData.lista, 0);
+    const mlPvp    = conf.pvp;
+    const diff     = lista > 0 && mlPvp > 0 ? ((mlPvp - lista) / lista * 100) : null;
+    return `<tr>
+      <td class="mono">${esc(prod.sku)}</td>
+      <td style="min-width:200px">${esc(prod.titulo)}</td>
+      <td class="r"><input type="number" value="${tnData.transf||''}" class="inp-sm" style="width:120px" placeholder="Precio costo" onchange="uTN('${esc(prod.sku)}','transf',+this.value)" title="Precio de transferencia interno / mayorista"></td>
+      <td class="r"><input type="number" value="${tnData.lista||''}" class="inp-sm" style="width:120px" placeholder="PVP lista" onchange="uTN('${esc(prod.sku)}','lista',+this.value)" title="Precio de lista publicado en Tienda Nube"></td>
+      <td class="r c-b" style="font-weight:600">${mlPvp > 0 ? fARS(mlPvp) : '<span style="color:var(--text3)">–</span>'}</td>
+      <td class="r">
+        ${diff !== null
+          ? `<span class="${diff >= 0 ? 'c-g' : 'c-r'}">${diff >= 0 ? '+' : ''}${fPct(diff)}</span>`
+          : '–'}
+      </td>
+      <td class="r">${r ? badge(r.mPct) : '–'}</td>
+      <td class="r">${lista > 0 && prod.costoConIva > 0 ? fPct((lista - nv(prod.costoConIva)) / lista * 100) : '–'}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="card">
+    <div class="hdr-row">
+      <div class="card-title"><i class="ti ti-shopping-cart"></i> Precios Tienda Nube</div>
+      <button class="btn-export" onclick="exportTN()"><i class="ti ti-download"></i> Exportar</button>
+    </div>
+    <div class="info-box"><i class="ti ti-info-circle"></i>
+      <b>Precio de transferencia:</b> costo interno o precio mayorista.<br>
+      <b>Precio de lista (TN):</b> PVP publicado en tu Tienda Nube.<br>
+      <b>Precio ML:</b> tomado automáticamente de la pestaña Pricing.<br>
+      <b>Dif. TN/ML:</b> diferencia porcentual entre lista de TN y PVP de ML.
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>SKU</th><th>Título</th>
+          <th class="r">Precio transferencia</th>
+          <th class="r">Precio lista TN</th>
+          <th class="r" style="color:var(--blue)">Precio ML</th>
+          <th class="r">Dif. TN / ML</th>
+          <th class="r">Margen ML</th>
+          <th class="r">Margen TN bruto</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3)">Sin productos cargados.</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS — PRODUCTOS
+═══════════════════════════════════════════════════════════ */
+function uProd(id, k, v) {
+  S.prods = S.prods.map(p => p.id === id ? {...p, [k]: (k==='sku'||k==='titulo') ? v : nv(v)} : p);
+  save('gh_prods', S.prods);
+}
+function uProdCosto(id, v, tipo) {
+  S.prods = S.prods.map(p => {
+    if (p.id !== id) return p;
+    const val = nv(v);
+    if (tipo === 'con') return {...p, costoConIva:val, costoSinIva: Math.round(val/(1+p.ivaR/100))};
+    return {...p, costoSinIva:val, costoConIva: Math.round(val*(1+p.ivaR/100))};
+  });
+  save('gh_prods', S.prods);
+}
+function recIva(id) {
+  S.prods = S.prods.map(p => p.id===id ? {...p, costoConIva:Math.round(p.costoSinIva*(1+p.ivaR/100))} : p);
+  save('gh_prods', S.prods);
+  renderProds();
+}
+function addProd() {
+  S.nextId++;
+  S.prods = [...S.prods, {id:S.nextId, sku:`SKU-${S.nextId}`, titulo:'Nuevo producto', costoSinIva:0, ivaR:21, costoConIva:0, defCatId:1}];
+  save('gh_prods', S.prods); save('gh_nextId', S.nextId);
+  renderProds();
+}
+function delProd(id) {
+  if (!confirm('¿Eliminar este producto?')) return;
+  S.prods = S.prods.filter(p => p.id !== id);
+  save('gh_prods', S.prods); renderProds();
+}
+function exportProds() {
+  const data = [['SKU','Título','Costo s/IVA','IVA %','Costo c/IVA','Categoría ML']];
+  S.prods.forEach(p => { const cat=S.cats.find(c=>c.id===p.defCatId); data.push([p.sku,p.titulo,p.costoSinIva,p.ivaR,p.costoConIva,cat?cat.n:'']); });
+  dlXlsx(data,'GH_Productos');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS — ML CONFIG
+═══════════════════════════════════════════════════════════ */
+function uCat(id, k, v) { S.cats=S.cats.map(c=>c.id===id?{...c,[k]:k==='n'?v:nv(v)}:c); save('gh_cats',S.cats); }
+function addCat() {
+  const id = Math.max(...S.cats.map(c=>c.id),0)+1;
+  S.cats = [...S.cats, {id, n:'Nueva categoría', c:14, p:17.14}];
+  save('gh_cats', S.cats); renderML();
+}
+function delCat(id) {
+  if (!confirm('¿Eliminar esta categoría?')) return;
+  S.cats = S.cats.filter(c=>c.id!==id); save('gh_cats',S.cats); renderML();
+}
+function uTier(id, k, v) { S.tiers=S.tiers.map(t=>t.id===id?{...t,[k]:k==='label'?v:nv(v)}:t); save('gh_tiers',S.tiers); }
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS — COSTOS FIJOS
+═══════════════════════════════════════════════════════════ */
+function uCF(k, v) {
+  const m = S.monthly[S.selMonth] || {};
+  S.monthly = {...S.monthly, [S.selMonth]: {...m, [k]: v}};
+  save('gh_monthly', S.monthly);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS — PRICING
+═══════════════════════════════════════════════════════════ */
+function uPConf(sku, k, v) {
+  S.pConf = {...S.pConf, [sku]: {...(S.pConf[sku]||{}), [k]: v}};
+  save('gh_pconf', S.pConf); renderPricing();
+}
+function exportPricing() {
+  const estruct = getEstruct(S.selMonth);
+  const hdr = ['SKU','Título','Publicación','Cuotas','Categoría','PVP','Envío','Uni/Mes','Costo c/IVA','Comisión ML','CF ML','Cuotas$','Imp.','Estructural','Total Costos','Margen $','Margen %','PVP Sugerido'];
+  const rows = [hdr];
+  S.prods.forEach(prod => {
+    const conf     = getPConf(prod.sku, prod);
+    const commRate = conf.tipo==='p' ? conf.cat.p : conf.cat.c;
+    const instRate = nv(S.inst[conf.cuotas], 0);
+    const r        = calcP({costoConIva:prod.costoConIva, pvp:conf.pvp, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct});
+    const sug      = calcSuggest({costoConIva:prod.costoConIva, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct, target:S.targetMargin});
+    rows.push([
+      prod.sku, prod.titulo,
+      conf.tipo==='p'?'Premium':'Clásica', conf.cuotas,
+      conf.cat.n, conf.pvp, conf.ship, conf.units, prod.costoConIva,
+      r?r.comm:'', r?r.fx:'', r?r.inst:'', r?(r.dc+r.iibb):'', estruct,
+      r?r.total:'', r?r.m$:'', r?parseFloat(r.mPct.toFixed(1)):'', sug||'',
+    ]);
+  });
+  dlXlsx(rows, 'GH_Pricing_' + S.selMonth);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS — TIENDA NUBE
+═══════════════════════════════════════════════════════════ */
+function uTN(sku, k, v) {
+  S.tn = {...S.tn, [sku]: {...(S.tn[sku]||{}), [k]: v}};
+  save('gh_tn', S.tn);
+}
+function exportTN() {
+  const estruct = getEstruct(S.selMonth);
+  const hdr = ['SKU','Título','Precio Transferencia','Precio Lista TN','Precio ML','Margen ML %','Margen TN Bruto %'];
+  const rows = [hdr];
+  S.prods.forEach(prod => {
+    const conf     = getPConf(prod.sku, prod);
+    const tnData   = S.tn[prod.sku] || {};
+    const commRate = conf.tipo==='p' ? conf.cat.p : conf.cat.c;
+    const instRate = nv(S.inst[conf.cuotas], 0);
+    const r        = calcP({costoConIva:prod.costoConIva, pvp:conf.pvp, commRate, ivaML:S.ivaML, instRate, ship:conf.ship, estruct});
+    const lista    = nv(tnData.lista, 0);
+    const mgnTN    = lista > 0 ? parseFloat(((lista-prod.costoConIva)/lista*100).toFixed(1)) : '';
+    rows.push([prod.sku, prod.titulo, tnData.transf||'', lista||'', conf.pvp||'', r?parseFloat(r.mPct.toFixed(1)):'', mgnTN]);
+  });
+  dlXlsx(rows, 'GH_TiendaNube');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXCEL IMPORT
+═══════════════════════════════════════════════════════════ */
+function handleFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const wb   = XLSX.read(evt.target.result, {type:'binary'});
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    if (data.length < 2) { alert('El archivo está vacío.'); return; }
+    const headers = data[0].map(h => String(h));
+    const rows    = data.slice(1).filter(r => r.some(c => c !== ''));
+    const fi = (names) => { for (const n of names) { const i=headers.findIndex(h=>h.toLowerCase().includes(n)); if(i>=0) return i; } return 0; };
+    S.importState = { headers, rows, colMap: {
+      sku:   fi(['sku','codigo','code','item']),
+      titulo:fi(['titulo','nombre','name','descripcion','product','articulo']),
+      civa:  fi(['c/iva','c.iva','civa','pvf']),
+      siva:  fi(['s/iva','s.iva','siva','base','neto']),
+      ivar:  fi(['iva','tax','impuesto']),
+    }};
+    renderProds();
+  };
+  reader.readAsBinaryString(file);
+  e.target.value = '';
+}
+
+function confirmImport() {
+  if (!S.importState) return;
+  const {rows, colMap} = S.importState;
+  let added = 0;
+  rows.forEach(r => {
+    const sku    = String(r[colMap.sku]   || '').trim();
+    const titulo = String(r[colMap.titulo] || '').trim();
+    if (!sku && !titulo) return;
+    const civa  = colMap.civa >= 0 ? nv(r[colMap.civa]) : 0;
+    const siva  = colMap.siva >= 0 ? nv(r[colMap.siva]) : 0;
+    const ivaR  = colMap.ivar >= 0 ? nv(r[colMap.ivar], 21) : 21;
+    let costoConIva = civa, costoSinIva = siva;
+    if (costoConIva && !costoSinIva) costoSinIva = Math.round(costoConIva / (1 + ivaR/100));
+    if (!costoConIva && costoSinIva) costoConIva = Math.round(costoSinIva * (1 + ivaR/100));
+    S.nextId++;
+    S.prods = [...S.prods, {id:S.nextId, sku:sku||'SKU-'+S.nextId, titulo:titulo||'Sin título', costoSinIva, ivaR, costoConIva, defCatId:1}];
+    added++;
+  });
+  S.importState = null;
+  save('gh_prods', S.prods); save('gh_nextId', S.nextId);
+  alert(`${added} productos importados correctamente.`);
+  renderProds();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORT HELPER
+═══════════════════════════════════════════════════════════ */
+function dlXlsx(data, name) {
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+  XLSX.writeFile(wb, `${name}.xlsx`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MISC HELPERS
+═══════════════════════════════════════════════════════════ */
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN RENDER
+═══════════════════════════════════════════════════════════ */
+function render() {
+  if (S.tab === 'prods')   renderProds();
+  if (S.tab === 'ml')      renderML();
+  if (S.tab === 'cf')      renderCF();
+  if (S.tab === 'pricing') renderPricing();
+  if (S.tab === 'tn')      renderTN();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT — load from localStorage
+═══════════════════════════════════════════════════════════ */
+(function init() {
+  S.selMonth = nowM();
+  const p  = ls.get('gh_prods',   null); if (p) S.prods   = p;
+  const c  = ls.get('gh_cats',    null); if (c) S.cats    = c;
+  const t  = ls.get('gh_tiers',   null); if (t) S.tiers   = t;
+  const i  = ls.get('gh_inst',    null); if (i) S.inst    = i;
+  const iv = ls.get('gh_ivaML',   null); if (iv!==null) S.ivaML = iv;
+  const m  = ls.get('gh_monthly', null); if (m) S.monthly = m;
+  const pc = ls.get('gh_pconf',   null); if (pc) S.pConf  = pc;
+  const tn = ls.get('gh_tn',      null); if (tn) S.tn     = tn;
+  const ni = ls.get('gh_nextId',  null); if (ni) S.nextId = ni;
+  renderProds();
+})();
+</script>
+</body>
+</html>
