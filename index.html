@@ -382,6 +382,7 @@ function renderProds(){
       <div class="flex">
         ${srchBar("prods")}
         <label style="cursor:pointer"><input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)"><button onclick="this.previousElementSibling.click()"><i class="ti ti-upload"></i> Importar</button></label>
+        <button onclick="resetCatalog()" title="Recargar catálogo desde el Excel embebido" style="color:var(--o);border-color:var(--o)"><i class="ti ti-refresh"></i> Reset catálogo</button>
         <button class="bp" onclick="addProd()"><i class="ti ti-plus"></i> Agregar</button>
         <button onclick="exportProds()" title="Exportar"><i class="ti ti-download"></i></button>
       </div>
@@ -982,6 +983,12 @@ function exportTN(){
   dlXlsx(d,"GH_TiendaNube");
 }
 
+function resetCatalog(){
+  if(!confirm("¿Restaurar el catálogo desde el Excel original?\nEsto borra solo los productos guardados, no los precios ni los costos fijos."))return;
+  S.prods=DEFAULT_PRODS;sv("gh_prods",DEFAULT_PRODS);
+  S.page.prods=1;S.search.prods="";renderProds();
+}
+
 /* ════════════════════════════════
    RENDER
 ════════════════════════════════ */
@@ -1000,9 +1007,17 @@ function render(){
 ════════════════════════════════ */
 (()=>{
   S.selMonth=nowM();
-  // Load from localStorage (user data takes priority over defaults)
+  // Load products: use localStorage only if data has real costs (not legacy empty data)
   const savedProds=ld("gh_prods",null);
-  S.prods=savedProds&&savedProds.length>0?savedProds:DEFAULT_PRODS;
+  const hasRealCosts=(arr)=>arr&&arr.length>0&&arr.slice(0,20).some(p=>nv(p.costoConIva)>0);
+  if(hasRealCosts(savedProds)){
+    // Migrate: strip [SKU] bracket prefix from titles if present (legacy import)
+    S.prods=savedProds.map(p=>({...p,titulo:p.titulo?p.titulo.replace(/^\[.*?\]\s*/,"").trim():p.titulo}));
+  } else {
+    // Legacy/empty data – use embedded defaults and clear old storage
+    S.prods=DEFAULT_PRODS;
+    sv("gh_prods",DEFAULT_PRODS);
+  }
   const sc=ld("gh_cats",null);if(sc)S.cats=sc;
   const st=ld("gh_tiers",null);if(st)S.tiers=st;
   const si=ld("gh_ins",null);if(si!==null)S.insRate=si;
