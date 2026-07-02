@@ -182,6 +182,7 @@ input.srch{padding:7px 10px 7px 34px;width:220px;font-size:12.5px;background:var
   <button class="tab-btn" id="t-cf"     onclick="go('cf')">    <i class="ti ti-building"></i>  Costos Fijos</button>
   <button class="tab-btn" id="t-pricing" onclick="go('pricing')"><i class="ti ti-calculator"></i>Pricing &amp; P&amp;L</button>
   <button class="tab-btn" id="t-precios" onclick="go('precios')"><i class="ti ti-circle-check"></i>Precios Actuales</button>
+  <button class="tab-btn" id="t-promos" onclick="go('promos')"><i class="ti ti-discount-2"></i>Promociones</button>
   <button class="tab-btn" id="t-tn"    onclick="go('tn')">     <i class="ti ti-shopping-cart"></i>Tienda Nube</button>
   <button class="tab-btn" id="t-ia"    onclick="go('ia')">     <i class="ti ti-brain"></i>      IA &amp; ML</button>
 </div>
@@ -191,6 +192,7 @@ input.srch{padding:7px 10px 7px 34px;width:220px;font-size:12.5px;background:var
   <div id="tab-cf"      style="display:none"></div>
   <div id="tab-pricing" style="display:none"></div>
   <div id="tab-precios" style="display:none"></div>
+  <div id="tab-promos" style="display:none"></div>
   <div id="tab-tn"      style="display:none"></div>
   <div id="tab-ia"      style="display:none"></div>
 </div>
@@ -268,6 +270,7 @@ const S={
   search:{},page:{},selMonth:"",targetMargin:20,
   pubFilter:"all",showApproved:false,sort:{pricing:{col:null,dir:1}},
   nextId:0,importState:null,aiMsgs:[],aiLoading:false,
+  promos:[],promoDraft:{sku:null,q:"",precio:"",tipo:"relampago",evento:"",desde:"",hasta:"",nota:""},
   cfDraft:{},sbCfg:{url:"",key:"",table:"productos",skuCol:"sku",mlaCol:"item_id"},sbPanel:false,sbBusy:false,
 };
 
@@ -412,7 +415,7 @@ const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}ca
 /* ════════════════════════════════
    NAVIGATION
 ════════════════════════════════ */
-const TABS=["prods","ml","cf","pricing","precios","tn","ia"];
+const TABS=["prods","ml","cf","pricing","precios","promos","tn","ia"];
 function go(t){
   TABS.forEach(id=>{
     document.getElementById("tab-"+id).style.display=id===t?"block":"none";
@@ -1241,12 +1244,227 @@ function resetCatalog(){
 /* ════════════════════════════════
    RENDER
 ════════════════════════════════ */
+/* ════════════════════════════════
+   TAB: PROMOCIONES
+════════════════════════════════ */
+const PROMO_TIPOS={
+  relampago:{lbl:"Relámpago",ico:"ti-bolt",col:"var(--o)",bg:"var(--obg)"},
+  stock:{lbl:"Hasta agotar stock",ico:"ti-package",col:"var(--b)",bg:"var(--bbg)"},
+  evento:{lbl:"Evento",ico:"ti-confetti",col:"#7c3aed",bg:"#f1ebfd"},
+};
+const promoTipoBadge=(p)=>{
+  const t=PROMO_TIPOS[p.tipo]||PROMO_TIPOS.stock;
+  const extra=p.tipo==="evento"&&p.evento?` · ${esc(p.evento)}`:"";
+  return`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:3px;background:${t.bg};color:${t.col};white-space:nowrap"><i class="ti ${t.ico}"></i>${t.lbl}${extra}</span>`;
+};
+const fDateAR=d=>{if(!d)return"";const[y,m,dd]=d.split("-");return`${dd}/${m}/${y.slice(2)}`};
+const promoVigencia=p=>{
+  if(p.tipo==="stock")return`<span style="color:var(--txt3)">Hasta agotar</span>`;
+  if(p.desde&&p.hasta)return`${fDateAR(p.desde)} → ${fDateAR(p.hasta)}`;
+  if(p.hasta)return`Hasta ${fDateAR(p.hasta)}`;
+  if(p.desde)return`Desde ${fDateAR(p.desde)}`;
+  return`<span style="color:var(--txt3)">Sin fecha</span>`;
+};
+const promoVencida=p=>{
+  if(!p.hasta)return false;
+  const hoy=new Date();const h=`${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}`;
+  return p.hasta<h;
+};
+// Margen a un PVP dado, respetando el modo de costo (auto recalcula envío/cargo fijo según el umbral al nuevo precio)
+const calcPromoAt=(prod,conf,pvp,est)=>{
+  if(!pvp||pvp<=0)return null;
+  const thr=shipThreshold();
+  const useShip=conf.mode==="envio"?true:conf.mode==="fijo"?false:(pvp>=thr);
+  return calcP({costoConIva:prod.costoConIva,pvp,commAllIn:conf.cat.c,insRt:conf.insRt,ship:useShip?conf.shipBase:0,estruct:est,useShip});
+};
+const svPromos=()=>sv("gh_promos",S.promos);
+function uPromoDraft(k,v){S.promoDraft={...S.promoDraft,[k]:v};renderPromos();}
+function promoPick(sku){S.promoDraft={...S.promoDraft,sku,q:""};renderPromos();}
+function promoClearDraft(){S.promoDraft={sku:null,q:"",precio:"",tipo:"relampago",evento:"",desde:"",hasta:"",nota:""};renderPromos();}
+function addPromo(){
+  const d=S.promoDraft;
+  const prod=S.prods.find(p=>p.sku===d.sku);
+  if(!prod){alert("Elegí un producto primero.");return;}
+  const precio=nv(d.precio);
+  if(!(precio>0)){alert("Ingresá el precio promocional.");return;}
+  if(d.tipo==="evento"&&!(d.evento||"").trim()){alert("Poné el nombre del evento.");return;}
+  S.promos=[...S.promos,{
+    id:Date.now(),sku:prod.sku,tipo:d.tipo||"relampago",evento:(d.evento||"").trim(),
+    desde:d.desde||"",hasta:d.hasta||"",precio,nota:(d.nota||"").trim(),
+    estado:"propuesta",creado:new Date().toISOString().slice(0,10),
+  }];
+  svPromos();promoClearDraft();
+}
+function setPromoEstado(id,estado){S.promos=S.promos.map(p=>p.id===id?{...p,estado}:p);svPromos();renderPromos();}
+function delPromo(id){
+  const p=S.promos.find(x=>x.id===id);if(!p)return;
+  if(!confirm(`¿Eliminar la promo de ${p.sku}? (usalo cuando la promo terminó)`))return;
+  S.promos=S.promos.filter(x=>x.id!==id);svPromos();renderPromos();
+}
+function exportPromos(){
+  const est=getEstruct(S.selMonth);
+  const rows=S.promos.map(pr=>{
+    const prod=S.prods.find(x=>x.sku===pr.sku)||{};
+    const conf=getPConf(pr.sku,prod);
+    const rA=conf.pvp>0?calcPromoAt(prod,conf,conf.pvp,est):null;
+    const rP=calcPromoAt(prod,conf,pr.precio,est);
+    const off=conf.pvp>0?(1-pr.precio/conf.pvp)*100:null;
+    return{
+      SKU:pr.sku,Titulo:prod.titulo||"",Tipo:PROMO_TIPOS[pr.tipo]?.lbl||pr.tipo,Evento:pr.evento||"",
+      Desde:pr.desde||"",Hasta:pr.hasta||"",
+      "PVP actual":conf.pvp||"", "Precio promo":pr.precio,
+      "% OFF":off!=null?+off.toFixed(1):"",
+      "Margen actual $":rA?Math.round(rA.m$):"","Margen actual %":rA?+rA.mPct.toFixed(1):"",
+      "Margen promo $":rP?Math.round(rP.m$):"","Margen promo %":rP?+rP.mPct.toFixed(1):"",
+      "Δ pts":(rA&&rP)?+(rP.mPct-rA.mPct).toFixed(1):"",
+      Estado:pr.estado,Nota:pr.nota||"",Creado:pr.creado||"",
+    };
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Promos");
+  XLSX.writeFile(wb,`Promos_GangaHome_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function renderPromos(){
+  const el=document.getElementById("tab-promos");
+  const est=getEstruct(S.selMonth);
+  const d=S.promoDraft;
+
+  /* ── búsqueda de producto ── */
+  const q=(d.q||"").toLowerCase().trim();
+  let results="";
+  if(q.length>=2&&!d.sku){
+    const found=S.prods.filter(p=>(p.sku||"").toLowerCase().includes(q)||(p.titulo||"").toLowerCase().includes(q)).slice(0,8);
+    results=found.length?`<div style="border:1px solid var(--bd);background:var(--bg);max-height:260px;overflow:auto;margin-top:4px">
+      ${found.map(p=>{const c=getPConf(p.sku,p);return`<div onclick="promoPick('${esc(p.sku)}')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--bg3);display:flex;justify-content:space-between;gap:10px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <span><b class="mono" style="font-size:11px">${esc(p.sku)}</b> <span style="font-size:12px;color:var(--txt2)">${esc(p.titulo)}</span></span>
+        <span style="font-size:11px;color:var(--txt3);white-space:nowrap">PVP ${c.pvp>0?fARS(c.pvp):"–"}</span>
+      </div>`}).join("")}
+    </div>`:`<div style="font-size:12px;color:var(--txt3);margin-top:6px">Sin resultados para “${esc(d.q)}”.</div>`;
+  }
+
+  /* ── producto elegido + preview ── */
+  let picked="";
+  if(d.sku){
+    const prod=S.prods.find(p=>p.sku===d.sku);
+    if(prod){
+      const conf=getPConf(prod.sku,prod);
+      const precio=nv(d.precio);
+      const rA=conf.pvp>0?calcPromoAt(prod,conf,conf.pvp,est):null;
+      const rP=precio>0?calcPromoAt(prod,conf,precio,est):null;
+      const off=conf.pvp>0&&precio>0?(1-precio/conf.pvp)*100:null;
+      const dpts=(rA&&rP)?rP.mPct-rA.mPct:null;
+      const esEvento=d.tipo==="evento";
+      const esStock=d.tipo==="stock";
+      picked=`
+      <div style="border:1px solid var(--bd);background:var(--bg2);padding:12px 14px;margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div>
+            <b class="mono" style="font-size:12px">${esc(prod.sku)}</b>
+            <div style="font-size:13px;margin-top:2px">${esc(prod.titulo)}</div>
+            <div style="font-size:11px;color:var(--txt3);margin-top:4px">Costo: <b style="color:var(--txt2)">${fARS(prod.costoConIva)}</b> · PVP actual: <b style="color:var(--txt2)">${conf.pvp>0?fARS(conf.pvp):"sin PVP"}</b>${rA?` · Margen actual: <b style="color:${mCol(rA.mPct)}">${fARS(rA.m$)} (${fPct(rA.mPct)})</b>`:""}</div>
+          </div>
+          <button onclick="promoClearDraft()" title="Quitar producto"><i class="ti ti-x"></i></button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px">
+          <div><label class="lbl">Precio promocional</label><input class="gi n" style="width:100%;background:var(--ybg)" placeholder="$…" value="${d.precio||""}" onchange="uPromoDraft('precio',parseARS(this.value))"></div>
+          <div><label class="lbl">Tipo de promo</label><select class="gs" style="width:100%" onchange="uPromoDraft('tipo',this.value)">
+            <option value="relampago"${d.tipo==="relampago"?" selected":""}>⚡ Relámpago</option>
+            <option value="stock"${d.tipo==="stock"?" selected":""}>📦 Hasta agotar stock</option>
+            <option value="evento"${d.tipo==="evento"?" selected":""}>🎪 Evento</option>
+          </select></div>
+          ${esEvento?`<div><label class="lbl">Nombre del evento</label><input style="width:100%" placeholder="Hot Sale, CyberMonday…" value="${esc(d.evento||"")}" onchange="uPromoDraft('evento',this.value)"></div>`:""}
+          ${!esStock?`<div><label class="lbl">Desde</label><input type="date" style="width:100%" value="${d.desde||""}" onchange="uPromoDraft('desde',this.value)"></div>
+          <div><label class="lbl">Hasta</label><input type="date" style="width:100%" value="${d.hasta||""}" onchange="uPromoDraft('hasta',this.value)"></div>`:""}
+          <div style="grid-column:1/-1"><label class="lbl">Nota (opcional)</label><input style="width:100%" placeholder="Justificación, stock disponible, etc." value="${esc(d.nota||"")}" onchange="uPromoDraft('nota',this.value)"></div>
+        </div>
+        ${rP?`<div style="margin-top:12px;padding:10px 12px;background:var(--bg);border:1px solid var(--bd);display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
+          <span>Descuento: <b style="color:var(--o)">${off!=null?fPct(off):"–"} OFF</b></span>
+          <span>Margen promo: <b style="color:${mCol(rP.mPct)}">${fARS(rP.m$)}</b> ${badge(rP.mPct)}</span>
+          ${dpts!=null?`<span>Δ margen: <b style="color:${dpts<0?"var(--r)":"var(--g)"}">${dpts>0?"+":""}${dpts.toFixed(1)} pts</b></span>`:""}
+          ${rP.mPct<0?`<span style="color:var(--r)"><i class="ti ti-alert-triangle"></i> Vendés a pérdida a este precio.</span>`:rP.mPct<8?`<span style="color:#b45309"><i class="ti ti-alert-triangle"></i> Margen muy fino.</span>`:""}
+        </div>`:""}
+        <div style="margin-top:12px"><button class="bp" onclick="addPromo()"><i class="ti ti-plus"></i> Agregar propuesta</button></div>
+      </div>`;
+    }
+  }
+
+  /* ── tabla de promos ── */
+  const nProp=S.promos.filter(p=>p.estado==="propuesta").length;
+  const nApr=S.promos.filter(p=>p.estado==="aprobada").length;
+  const nVenc=S.promos.filter(promoVencida).length;
+  const rows=S.promos.map(pr=>{
+    const prod=S.prods.find(x=>x.sku===pr.sku)||{sku:pr.sku,titulo:"(producto no encontrado)",costoConIva:0};
+    const conf=getPConf(pr.sku,prod);
+    const rA=conf.pvp>0?calcPromoAt(prod,conf,conf.pvp,est):null;
+    const rP=calcPromoAt(prod,conf,pr.precio,est);
+    const off=conf.pvp>0?(1-pr.precio/conf.pvp)*100:null;
+    const dpts=(rA&&rP)?rP.mPct-rA.mPct:null;
+    const venc=promoVencida(pr);
+    const estBadge=pr.estado==="aprobada"?`<span class="badge bg-g">Aprobada</span>`
+      :pr.estado==="rechazada"?`<span class="badge bg-r">Rechazada</span>`
+      :`<span class="badge" style="background:var(--bbg);color:var(--b)">Propuesta</span>`;
+    return`<tr${venc?` style="background:var(--rbg)"`:""}>
+      <td class="sk mono">${esc(pr.sku)}</td>
+      <td style="min-width:240px;white-space:normal">${esc(prod.titulo)}</td>
+      <td>${promoTipoBadge(pr)}</td>
+      <td style="font-size:11px;white-space:nowrap">${promoVigencia(pr)}${venc?` <span class="badge bg-r" style="margin-left:4px">Vencida</span>`:""}</td>
+      <td class="num dim">${conf.pvp>0?fARS(conf.pvp):"–"}</td>
+      <td class="num" style="background:var(--ybg)"><b>${fARS(pr.precio)}</b></td>
+      <td class="num" style="color:var(--o)">${off!=null?fPct(off):"–"}</td>
+      <td>${rA?badge(rA.mPct):"–"}</td>
+      <td class="num" style="font-weight:600;color:${rP?mCol(rP.mPct):"inherit"}">${rP?fARS(rP.m$):"–"}</td>
+      <td>${rP?badge(rP.mPct):"–"}</td>
+      <td class="num" style="color:${dpts!=null&&dpts<0?"var(--r)":"var(--g)"}">${dpts!=null?`${dpts>0?"+":""}${dpts.toFixed(1)}`:"–"}</td>
+      <td>${estBadge}</td>
+      <td style="white-space:nowrap;text-align:right">
+        ${pr.estado==="propuesta"?`<button title="Aprobar" style="color:var(--g)" onclick="setPromoEstado(${pr.id},'aprobada')"><i class="ti ti-check"></i></button>
+        <button title="Rechazar" style="color:var(--r)" onclick="setPromoEstado(${pr.id},'rechazada')"><i class="ti ti-x"></i></button>`:
+        `<button title="Volver a propuesta" onclick="setPromoEstado(${pr.id},'propuesta')"><i class="ti ti-arrow-back-up"></i></button>`}
+        <button title="Eliminar (promo terminada)" onclick="delPromo(${pr.id})"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  el.innerHTML=`
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><i class="ti ti-discount-2"></i> Nueva propuesta de promoción</div>
+      <span style="font-size:11px;color:var(--txt3)">Mes de estructura: <b>${mLbl(S.selMonth)}</b></span>
+    </div>
+    <div class="info"><i class="ti ti-info-circle"></i> Buscá el producto, poné el <b>precio promo</b> y elegí el tipo (<b>⚡ relámpago</b>, <b>📦 hasta agotar stock</b> o <b>🎪 evento</b>). Abajo ves al instante el <b>% OFF</b> y cómo queda el <b>margen</b> vs. el actual, para mandarlo a aprobar. Cuando la promo termina, la eliminás con el tachito.</div>
+    ${!d.sku?`<div style="max-width:520px"><label class="lbl">Producto</label>
+      <div class="srch-w" style="width:100%"><i class="ti ti-search"></i><input class="srch" style="width:100%" type="text" placeholder="Buscar por SKU o título…" value="${esc(d.q||"")}" oninput="uPromoDraft('q',this.value)"></div>
+      ${results}</div>`:""}
+    ${picked}
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><i class="ti ti-list-check"></i> Promociones (${S.promos.length})</div>
+      <div class="flex">
+        <span style="font-size:11px;color:var(--txt2)"><b style="color:var(--b)">${nProp}</b> propuestas · <b style="color:var(--g)">${nApr}</b> aprobadas${nVenc>0?` · <b style="color:var(--r)">${nVenc}</b> vencidas`:""}</span>
+        ${S.promos.length?`<button onclick="exportPromos()" title="Exportar a Excel"><i class="ti ti-download"></i></button>`:""}
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th class="sk">SKU</th><th>Título</th><th>Tipo</th><th>Vigencia</th>
+        <th class="r">PVP actual</th><th class="r" style="background:var(--ybg);color:var(--yd)">Precio promo</th><th class="r">% OFF</th>
+        <th class="r" style="border-left:1px solid var(--bd2)">Margen actual</th>
+        <th class="r" style="color:var(--g)">Margen promo $</th><th class="r">Margen promo %</th><th class="r">Δ pts</th>
+        <th>Estado</th><th class="r">Acciones</th>
+      </tr></thead>
+      <tbody>${rows||`<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--txt3)">Todavía no hay promociones propuestas.</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+
 function render(){
   if(S.tab==="prods")   renderProds();
   else if(S.tab==="ml")      renderML();
   else if(S.tab==="cf")      renderCF();
   else if(S.tab==="pricing") renderPricing();
   else if(S.tab==="precios") renderPrecios();
+  else if(S.tab==="promos")  renderPromos();
   else if(S.tab==="tn")      renderTN();
   else if(S.tab==="ia")      renderIA();
 }
@@ -1290,6 +1508,7 @@ function render(){
   if(_pvpFill>0)sv("gh_pconf",S.pConf);
   const stn=ld("gh_tn",null);S.tn={...DEFAULT_TN,...(stn||{})};
   const sch=ld("gh_checked",null);if(sch)S.checked=sch;
+  const spr=ld("gh_promos",null);if(spr&&Array.isArray(spr))S.promos=spr;
   S.nextId=Math.max(0,...S.prods.map(p=>p.id))+1;
   renderProds();
 })();
