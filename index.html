@@ -1278,8 +1278,8 @@ const calcPromoAt=(prod,conf,pvp,est)=>{
   return calcP({costoConIva:prod.costoConIva,pvp,commAllIn:conf.cat.c,insRt:conf.insRt,ship:useShip?conf.shipBase:0,estruct:est,useShip});
 };
 // Promo cofinanciada por ML: el comprador paga precioFinal; ML te reintegra su aporte aparte.
-// Las comisiones e impuestos de ML se calculan sobre el precio final (lo que ve el comprador);
-// el aporte de ML entra como ingreso extra limpio → recibís precioFinal + aporteML.
+// Liquidación como ML: los cargos se calculan sobre el PVP menos TU descuento (= precio final + aporte ML),
+// igual que la solapa Pricing con ese precio como PVP nuevo.
 const calcCoFund=(prod,conf,promo,est)=>{
   const pvp=conf.pvp;
   const pf=nv(promo.precio);
@@ -1292,19 +1292,14 @@ const calcCoFund=(prod,conf,promo,est)=>{
     if(descTot>0&&aporteML>descTot)aporteML=descTot; // ML no aporta más que el descuento total
   }
   const aporteVend=Math.max(descTot-aporteML,0);
-  const ingreso=pf+aporteML;                        // lo que recibís a efectos de liquidación
+  const base=pf+aporteML;                           // = PVP − descuento tuyo: base de liquidación
   const thr=shipThreshold();
-  const useShip=conf.mode==="envio"?true:conf.mode==="fijo"?false:(pf>=thr);
-  const comm=pf*conf.cat.c/100;                      // cargos ML sobre el precio final
-  const fxB=useShip?0:getCFml(pf,S.tiers);
-  const ship=useShip?nv(conf.shipBase):0;
-  const dc=pf*0.006,iibb=pf*0.05,ins=pf*nv(conf.insRt)/100;
-  const tot=nv(prod.costoConIva)+comm+fxB+ship+dc+iibb+ins+nv(est);
-  const m$=ingreso-tot;
-  const mPct=ingreso>0?m$/ingreso*100:0;
+  const useShip=conf.mode==="envio"?true:conf.mode==="fijo"?false:(pf>=thr); // envío gratis según el precio que ve el comprador
+  const r=calcP({costoConIva:prod.costoConIva,pvp:base,commAllIn:conf.cat.c,insRt:conf.insRt,ship:useShip?conf.shipBase:0,estruct:est,useShip});
+  if(!r)return null;
   const offTotal=pvp>0?(1-pf/pvp)*100:null;          // % OFF total que ve el comprador
   const offTuyo=pvp>0?aporteVend/pvp*100:null;        // cuánto del OFF lo bancás vos
-  return{pf,pvp,descTot,aporteML,aporteVend,ingreso,comm,fxB,ship,dc,iibb,ins,tot,m$,mPct,offTotal,offTuyo,useShip};
+  return{pf,pvp,descTot,aporteML,aporteVend,ingreso:base,comm:r.comm,fxB:r.fxB,ship:useShip?nv(conf.shipBase):0,dc:r.dc,iibb:r.iibb,ins:r.ins,tot:r.tot,m$:r.m$,mPct:r.mPct,offTotal,offTuyo,useShip};
 };
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
