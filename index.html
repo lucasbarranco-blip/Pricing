@@ -408,7 +408,7 @@ function setPubFilter(v){S.pubFilter=v;Object.keys(S.page).forEach(k=>S.page[k]=
    STORAGE — debounced writes
 ════════════════════════════════ */
 let _st,_sp;
-const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));const d=document.getElementById("sdot");if(d){d.style.opacity="1";clearTimeout(_st);_st=setTimeout(()=>d.style.opacity="0",700)}}catch(e){}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));const d=document.getElementById("sdot");if(d){d.style.opacity="1";clearTimeout(_st);_st=setTimeout(()=>d.style.opacity="0",700)}}catch(e){}try{pushStateRemote(k,v)}catch(e){}};
 const svProds=()=>{clearTimeout(_sp);_sp=setTimeout(()=>sv("gh_prods",S.prods),600)};
 const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}};
 
@@ -1301,6 +1301,42 @@ const calcCoFund=(prod,conf,promo,est)=>{
   const offTuyo=pvp>0?aporteVend/pvp*100:null;        // cuánto del OFF lo bancás vos
   return{pf,pvp,descTot,aporteML,aporteVend,ingreso:base,comm:r.comm,fxB:r.fxB,ship:useShip?nv(conf.shipBase):0,dc:r.dc,iibb:r.iibb,ins:r.ins,tot:r.tot,m$:r.m$,mPct:r.mPct,offTotal,offTuyo,useShip};
 };
+/* ── Sync remoto de TODO el estado (Supabase, tabla pricing_state) ──
+   Una fila por clave de localStorage (k = clave, v = valor JSON).
+   Al abrir la app se baja el estado remoto y pisa lo local; cada guardado lo sube.
+   Last-write-wins por clave. */
+const SYNC_KEYS=["gh_prods","gh_cats","gh_cffields","gh_tiers","gh_ship","gh_shipbysku","gh_ins","gh_monthly","gh_pconf","gh_tn","gh_checked"];
+let _syncMuted=true,_psT={},_upFirst=[];
+function syncMark(ok){const d=document.getElementById("sdot");if(!d)return;d.title=ok?"Sincronizado en la nube":"Sin conexión con Supabase (guardado solo local)";d.style.background=ok?"":"var(--dn)";}
+const pushStateRemote=(k,v)=>{
+  if(_syncMuted||SYNC_KEYS.indexOf(k)<0)return;
+  clearTimeout(_psT[k]);
+  _psT[k]=setTimeout(async()=>{
+    try{const{url,key}=sbConn();
+      const r=await fetch(url+"/rest/v1/pricing_state?on_conflict=k",{method:"POST",headers:{...sbHdr(key),Prefer:"resolution=merge-duplicates"},body:JSON.stringify([{k,v,updated_at:new Date().toISOString()}])});
+      if(!r.ok){console.warn("sync push",k,r.status,await r.text());syncMark(false);}else syncMark(true);
+    }catch(e){console.warn("sync push",k,e);syncMark(false);}
+  },1000);
+};
+async function loadStateRemote(){
+  try{const{url,key}=sbConn();
+    const r=await fetch(url+"/rest/v1/pricing_state?select=k,v",{headers:sbHdr(key)});
+    if(!r.ok){console.warn("sync pull",r.status);syncMark(false);return false;}
+    const rows=await r.json();
+    if(!Array.isArray(rows))return false;
+    const seen=new Set();
+    rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0||row.v==null)return;seen.add(row.k);try{localStorage.setItem(row.k,JSON.stringify(row.v))}catch(e){}});
+    _upFirst=SYNC_KEYS.filter(k=>!seen.has(k));
+    syncMark(true);
+    return true;
+  }catch(e){console.warn("sync pull",e);syncMark(false);return false}
+}
+function syncUnmute(){
+  _syncMuted=false;
+  _upFirst.forEach(k=>{const v=ld(k,null);if(v!=null)pushStateRemote(k,v)});
+  _upFirst=[];
+}
+
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
    Permite que todo el equipo vea las mismas promos desde cualquier dispositivo. */
@@ -1550,8 +1586,9 @@ function render(){
 /* ════════════════════════════════
    INIT
 ════════════════════════════════ */
-(()=>{
+(async()=>{
   S.selMonth=nowM();
+  await loadStateRemote();
   // Load products: use localStorage only if data has real costs (not legacy empty data)
   const savedProds=ld("gh_prods",null);
   const hasRealCosts=(arr)=>arr&&arr.length>0&&arr.slice(0,20).some(p=>nv(p.costoConIva)>0);
@@ -1590,6 +1627,7 @@ function render(){
   loadPromosRemote();
   S.nextId=Math.max(0,...S.prods.map(p=>p.id))+1;
   renderProds();
+  syncUnmute();
 })();
 </script>
 </body>
