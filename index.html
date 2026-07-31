@@ -704,6 +704,7 @@ function renderPricing(){
       <td class="sk mono">${esc(prod.sku)}</td>
       <td style="min-width:320px;white-space:normal">${esc(prod.titulo)}</td>
       <td style="background:var(--ybg)"><input class="gi n" value="${conf.pvp||""}" style="width:95px;background:transparent" placeholder="PVP…" onchange="uPConf('${esc(prod.sku)}','pvp',+this.value)"></td>
+      ${promoHastaCell(prod.sku)}
       <td style="text-align:center"><select class="gs" style="font-size:11px;padding:2px 4px;max-width:84px" title="Elegí qué costo se aplica: Auto (según los $33.000), Envío (costo del Excel) o Cargo fijo." onchange="uPConf('${esc(prod.sku)}','costMode',this.value)">
         <option value="auto"${conf.mode==="auto"?" selected":""}>Auto</option>
         <option value="envio"${conf.mode==="envio"?" selected":""}>Envío</option>
@@ -780,6 +781,7 @@ function renderPricing(){
         <th class="sk" style="cursor:pointer" onclick="setSort('sku')">SKU${sIco('sku')}</th>
         <th style="cursor:pointer" onclick="setSort('titulo')">Título${sIco('titulo')}</th>
         <th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" onclick="setSort('pvp')">PVP ✎${sIco('pvp')}</th>
+        <th class="r" title="Hasta cuándo dura la promoción vigente de esta publicación">Promo hasta</th>
         <th class="r">Modo</th>
         <th class="r" style="cursor:pointer" onclick="setSort('envio')">Envío${sIco('envio')}</th>
         <th class="r" style="border-left:1px solid var(--bd2);cursor:pointer" onclick="setSort('costo')">Costo${sIco('costo')}</th>
@@ -842,10 +844,11 @@ function renderPrecios(){
     return`<tr>
       <td class="dim">${(page-1)*PAGE+i+1}</td>
       <td class="mono sk">${esc(prod.sku)}</td>
-      <td class="mono dim">${esc(prod.mla||"–")}</td>
+      <td class="mono dim">${prod.mla?`<a href="https://articulo.mercadolibre.com.ar/${esc(prod.mla).replace(/^(MLA)/,"$1-")}" target="_blank" style="color:var(--b);text-decoration:none" title="Abrir publicación en ML">${esc(prod.mla)} ↗</a>`:"–"}</td>
       <td style="min-width:200px">${esc(prod.titulo)}</td>
       <td class="num">${fARS(prod.costoConIva)}</td>
       <td class="num" style="font-weight:600;color:var(--b)">${conf.pvp>0?fARS(conf.pvp):"<span style='color:var(--txt3)'>–</span>"}</td>
+      ${promoHastaCell(prod.sku)}
       <td class="num dim">${r?fARS(r.comm):"–"}</td>
       <td class="num dim">${r?fARS(r.dc+r.iibb):"–"}</td>
       <td class="num dim">${conf.shipEff>0?fARS(conf.shipEff):"–"}</td>
@@ -863,7 +866,7 @@ function renderPrecios(){
     ${allChk.length===0
       ?`<div style="text-align:center;padding:40px;color:var(--txt3)"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3"></i>Tildá productos en Pricing &amp; P&amp;L para aprobarlos.</div>`
       :`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th class="sk">SKU</th><th>MLA</th><th>Título</th><th class="r">Costo c/IVA</th><th class="r" style="color:var(--b)">PVP</th><th class="r">Com.ML</th><th class="r">Imp.</th><th class="r">Envío</th><th class="r">Total</th><th class="r" style="color:var(--g)">Margen $</th><th class="r">Margen %</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th class="sk">SKU</th><th>MLA</th><th>Título</th><th class="r">Costo c/IVA</th><th class="r" style="color:var(--b)">PVP</th><th title="Hasta cuándo dura la promoción vigente">Promo hasta</th><th class="r">Com.ML</th><th class="r">Imp.</th><th class="r">Envío</th><th class="r">Total</th><th class="r" style="color:var(--g)">Margen $</th><th class="r">Margen %</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>${pagerHtml(total,page,pages,"precios")}`
     }
@@ -1107,7 +1110,20 @@ function delCFField(k){
   const d2={};Object.keys(S.cfDraft||{}).forEach(mk=>{const cp={...(S.cfDraft[mk]||{})};delete cp[k];d2[mk]=cp});S.cfDraft=d2;
   renderCF();
 }
-function uPConf(sku,k,v){S.pConf={...S.pConf,[sku]:{...(S.pConf[sku]||{}),[k]:v}};sv("gh_pconf",S.pConf);renderPricing()}
+const promoHastaInfo=sku=>{
+  const c=S.pConf[sku]||{};
+  if(c.promoHasta)return{v:c.promoHasta,manual:true};
+  const hoy=new Date().toISOString().slice(0,10);
+  const pr=(S.promos||[]).filter(p=>p.sku===sku&&p.hasta&&p.hasta>=hoy).sort((a,b)=>a.hasta.localeCompare(b.hasta))[0];
+  return{v:pr?pr.hasta:"",manual:false};
+};
+const promoHastaCell=sku=>{
+  const i=promoHastaInfo(sku);
+  const hoy=new Date().toISOString().slice(0,10);
+  const vencida=i.v&&i.v<hoy;
+  return `<td><input type="date" class="gi" value="${i.v}" style="width:118px;font-size:11px${i.manual?"":";color:var(--txt3)"}${vencida?";color:var(--r)":""}" title="${i.manual?"Fecha cargada a mano.":i.v?"Inferida de la promo activa en Promociones. Editá para fijarla a mano.":"Sin promo. Cargá hasta cuándo dura."}" onchange="uPConf('${esc(sku)}','promoHasta',this.value)"></td>`;
+};
+function uPConf(sku,k,v){S.pConf={...S.pConf,[sku]:{...(S.pConf[sku]||{}),[k]:v}};sv("gh_pconf",S.pConf);S.tab==="precios"?renderPrecios():renderPricing()}
 function toggleChk(sku,val){S.checked={...S.checked,[sku]:val};sv("gh_checked",S.checked);render()}
 function clearPrecios(){if(!confirm("¿Quitar todos?"))return;S.checked={};sv("gh_checked",S.checked);render()}
 function uTN(sku,k,v){S.tn={...S.tn,[sku]:{...(S.tn[sku]||{}),[k]:v}};sv("gh_tn",S.tn)}
@@ -1615,7 +1631,7 @@ function renderPromos(){
   const nApr=S.promos.filter(p=>p.estado==="aprobada").length;
   const nVenc=S.promos.filter(promoVencida).length;
   const rows=S.promos.map(pr=>{
-    const prod=S.prods.find(x=>x.sku===pr.sku)||{sku:pr.sku,titulo:"(producto no encontrado)",costoConIva:0};
+    const prod=S.prods.find(x=>x.sku===pr.sku)||{sku:pr.sku,titulo:pr.titulo||"(producto no encontrado)",costoConIva:0,_noCost:true};
     const conf=getPConf(pr.sku,prod);
     const rA=conf.pvp>0?calcPromoAt(prod,conf,conf.pvp,est):null;
     const rReal=calcCoFund(prod,conf,pr,est);
@@ -1635,8 +1651,8 @@ function renderPromos(){
       <td class="num" style="color:var(--o)">${off!=null?fPct(off):"–"}</td>
       <td class="num" style="color:var(--g)" title="${pr.cofin&&rReal&&rReal.descTot>0?'ML aporta '+fPct(rReal.aporteML/rReal.descTot*100)+' del descuento':''}">${pr.cofin&&rReal?fARS(rReal.aporteML):"–"}</td>
       <td>${rA?badge(rA.mPct):"–"}</td>
-      <td class="num" style="font-weight:600;color:${rReal?mCol(rReal.mPct):"inherit"}" title="${pr.cofin?'Margen real considerando el aporte de ML':'Margen a este precio'}">${rReal?fARS(rReal.m$):"–"}</td>
-      <td>${rReal?badge(rReal.mPct):"–"}</td>
+      <td class="num" style="font-weight:600;color:${(rReal&&!prod._noCost)?mCol(rReal.mPct):"inherit"}" title="${prod._noCost?'Sin costo cargado en Productos: no se puede calcular margen.':pr.cofin?'Margen real considerando el aporte de ML':'Margen a este precio'}">${(rReal&&!prod._noCost)?fARS(rReal.m$):"–"}</td>
+      <td>${(rReal&&!prod._noCost)?badge(rReal.mPct):"–"}</td>
       <td class="num" style="color:${dpts!=null&&dpts<0?"var(--r)":"var(--g)"}">${dpts!=null?`${dpts>0?"+":""}${dpts.toFixed(1)}`:"–"}</td>
       <td>${estBadge}</td>
       <td style="white-space:nowrap;text-align:right">
