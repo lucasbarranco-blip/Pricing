@@ -182,6 +182,7 @@ input.srch{padding:7px 10px 7px 34px;width:220px;font-size:12.5px;background:var
   <button class="tab-btn" id="t-cf"     onclick="go('cf')">    <i class="ti ti-building"></i>  Costos Fijos</button>
   <button class="tab-btn" id="t-pricing" onclick="go('pricing')"><i class="ti ti-calculator"></i>Pricing &amp; P&amp;L</button>
   <button class="tab-btn" id="t-precios" onclick="go('precios')"><i class="ti ti-circle-check"></i>Precios Actuales</button>
+  <button class="tab-btn" id="t-flex"   onclick="go('flex')">   <i class="ti ti-motorbike"></i>Envíos Flex</button>
   <button class="tab-btn" id="t-promos" onclick="go('promos')"><i class="ti ti-discount-2"></i>Promociones</button>
   <button class="tab-btn" id="t-tn"    onclick="go('tn')">     <i class="ti ti-shopping-cart"></i>Tienda Nube</button>
   <button class="tab-btn" id="t-ia"    onclick="go('ia')">     <i class="ti ti-brain"></i>      IA &amp; ML</button>
@@ -192,6 +193,7 @@ input.srch{padding:7px 10px 7px 34px;width:220px;font-size:12.5px;background:var
   <div id="tab-cf"      style="display:none"></div>
   <div id="tab-pricing" style="display:none"></div>
   <div id="tab-precios" style="display:none"></div>
+  <div id="tab-flex"   style="display:none"></div>
   <div id="tab-promos" style="display:none"></div>
   <div id="tab-tn"      style="display:none"></div>
   <div id="tab-ia"      style="display:none"></div>
@@ -270,6 +272,7 @@ const S={
   search:{},page:{},selMonth:"",targetMargin:20,
   pubFilter:"all",showApproved:false,sort:{pricing:{col:null,dir:1}},
   nextId:0,importState:null,aiMsgs:[],aiLoading:false,
+  flex:null,
   promos:[],promoDraft:{sku:null,q:"",precio:"",tipo:"relampago",evento:"",desde:"",hasta:"",nota:""},
   cfDraft:{},sbCfg:{url:"",key:"",table:"productos",skuCol:"sku",mlaCol:"item_id"},sbPanel:false,sbBusy:false,
 };
@@ -415,7 +418,7 @@ const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}ca
 /* ════════════════════════════════
    NAVIGATION
 ════════════════════════════════ */
-const TABS=["prods","ml","cf","pricing","precios","promos","tn","ia"];
+const TABS=["prods","ml","cf","pricing","precios","flex","promos","tn","ia"];
 function go(t){
   TABS.forEach(id=>{
     document.getElementById("tab-"+id).style.display=id===t?"block":"none";
@@ -1305,7 +1308,7 @@ const calcCoFund=(prod,conf,promo,est)=>{
    Una fila por clave de localStorage (k = clave, v = valor JSON).
    Al abrir la app se baja el estado remoto y pisa lo local; cada guardado lo sube.
    Last-write-wins por clave. */
-const SYNC_KEYS=["gh_prods","gh_cats","gh_cffields","gh_tiers","gh_ship","gh_shipbysku","gh_ins","gh_monthly","gh_pconf","gh_tn","gh_checked"];
+const SYNC_KEYS=["gh_prods","gh_cats","gh_cffields","gh_tiers","gh_ship","gh_shipbysku","gh_ins","gh_monthly","gh_pconf","gh_tn","gh_checked","gh_flex"];
 let _syncMuted=true,_psT={},_upFirst=[];
 function syncMark(ok){const d=document.getElementById("sdot");if(!d)return;d.title=ok?"Sincronizado en la nube":"Sin conexión con Supabase (guardado solo local)";d.style.background=ok?"":"var(--dn)";}
 const pushStateRemote=(k,v)=>{
@@ -1414,6 +1417,113 @@ function exportPromos(){
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Promos");
   XLSX.writeFile(wb,`Promos_GangaHome_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
+/* ── TAB: ENVÍOS FLEX ─────────────────────────────────────────────
+   Margen por anillo de distancia. Cada anillo tiene su tarifa de
+   entrega propia y, opcionalmente, lo que ML te descuenta por el
+   envío Flex (reemplaza al costo de envío Full cuando PVP >= umbral). */
+const DEFAULT_FLEX={zonas:[
+  {id:1,n:"Anillo 1",tarifa:3000,cargoML:0,mix:40},
+  {id:2,n:"Anillo 2",tarifa:4500,cargoML:0,mix:35},
+  {id:3,n:"Anillo 3",tarifa:6000,cargoML:0,mix:25}
+],seed:true};
+const flexCfg=()=>S.flex||DEFAULT_FLEX;
+const svFlex=()=>{S.flex={...flexCfg(),seed:false};sv("gh_flex",S.flex);renderFlex()};
+function uFlexZona(id,k,v){
+  const f=flexCfg();
+  S.flex={...f,zonas:f.zonas.map(z=>z.id===id?{...z,[k]:(k==="n"?v:nv(v))}:z)};
+  svFlex();
+}
+function addFlexZona(){
+  const f=flexCfg();const id=Math.max(0,...f.zonas.map(z=>z.id))+1;
+  S.flex={...f,zonas:[...f.zonas,{id,n:"Anillo "+id,tarifa:0,cargoML:0,mix:0}]};
+  svFlex();
+}
+function delFlexZona(id){
+  const f=flexCfg();if(f.zonas.length<=1)return;
+  S.flex={...f,zonas:f.zonas.filter(z=>z.id!==id)};svFlex();
+}
+/* Margen Flex de un producto en una zona: misma estructura de costos que
+   Full, pero el envío de ML se reemplaza por cargoML y se suma tu tarifa. */
+const flexRow=(prod,zona,est)=>{
+  const conf=getPConf(prod.sku,prod);
+  if(!conf.pvp||conf.pvp<=0)return null;
+  const base={costoConIva:prod.costoConIva,pvp:conf.pvp,commAllIn:conf.cat.c,insRt:conf.insRt,estruct:est,useShip:conf.useShip};
+  const rFull=calcP({...base,ship:conf.shipEff});
+  const rFlex=calcP({...base,ship:conf.useShip?nv(zona.cargoML):0});
+  if(!rFull||!rFlex)return null;
+  const m$=rFlex.m$-nv(zona.tarifa);
+  return{conf,pvp:conf.pvp,full$:rFull.m$,fullPct:rFull.mPct,flex$:m$,flexPct:conf.pvp>0?m$/conf.pvp*100:0,
+         envioFull:conf.shipEff,costoFlex:(conf.useShip?nv(zona.cargoML):0)+nv(zona.tarifa)};
+};
+function renderFlex(){
+  const el=document.getElementById("tab-flex");
+  const f=flexCfg();const est=getEstruct(S.selMonth);
+  const zRows=f.zonas.map(z=>`<tr>
+    <td><input class="gi" value="${esc(z.n)}" style="width:130px" onchange="uFlexZona(${z.id},'n',this.value)"></td>
+    <td><input class="gi n" type="number" value="${nv(z.tarifa)}" style="width:95px" onchange="uFlexZona(${z.id},'tarifa',this.value)"></td>
+    <td><input class="gi n" type="number" value="${nv(z.cargoML)}" style="width:95px" onchange="uFlexZona(${z.id},'cargoML',this.value)"></td>
+    <td><input class="gi n" type="number" value="${nv(z.mix)}" style="width:70px" onchange="uFlexZona(${z.id},'mix',this.value)"></td>
+    <td><button class="bi" onclick="delFlexZona(${z.id})"><i class="ti ti-trash" style="font-size:13px"></i></button></td>
+  </tr>`).join("");
+  const all=S.prods.filter(p=>getPConf(p.sku,p).pvp>0);
+  const list=srchFilter(all,"flex");
+  const mixTot=f.zonas.reduce((s,z)=>s+nv(z.mix),0)||1;
+  let sumFull=0,sumFlex=0,n=0,mejoran=0;
+  const body=list.slice(0,300).map(p=>{
+    const cells=f.zonas.map(z=>{
+      const r=flexRow(p,z,est);
+      if(!r)return{r:null,html:'<td class="r dim">–</td><td class="r dim">–</td>'};
+      const d=r.flex$-r.full$;
+      return{r,html:`<td class="r" style="color:${mCol(r.flexPct)}">${fARS(r.flex$)}</td>
+        <td class="r">${badge(r.flexPct)} <span class="dim" style="font-size:11px">${d>=0?"+":""}${fARS(d)}</span></td>`};
+    });
+    const first=cells.find(c=>c.r);
+    if(!first)return"";
+    n++;sumFull+=first.r.fullPct;
+    const pond=f.zonas.reduce((s,z,i)=>s+(cells[i].r?cells[i].r.flexPct*nv(z.mix):0),0)/mixTot;
+    sumFlex+=pond;
+    if(pond>first.r.fullPct)mejoran++;
+    return`<tr>
+      <td class="dim" style="font-size:11px">${esc(p.sku)}</td>
+      <td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.titulo||"")}</td>
+      <td class="r">${fARS(first.r.pvp)}</td>
+      <td class="r dim">${fARS(first.r.envioFull)}</td>
+      <td class="r" style="color:${mCol(first.r.fullPct)}">${fARS(first.r.full$)}</td>
+      <td class="r">${badge(first.r.fullPct)}</td>
+      ${cells.map(c=>c.html).join("")}
+      <td class="r"><b>${fPct(pond)}</b></td>
+    </tr>`;
+  }).join("");
+  const hdr=f.zonas.map(z=>`<th class="r" colspan="2">${esc(z.n)}</th>`).join("");
+  el.innerHTML=`<div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><i class="ti ti-motorbike"></i> Zonas Flex</div>
+      <button onclick="addFlexZona()"><i class="ti ti-plus"></i> Agregar anillo</button>
+    </div>
+    <div class="info"><i class="ti ti-info-circle"></i> <b>Tarifa</b> = lo que te cuesta la entrega en ese anillo. <b>Cargo ML</b> = lo que ML te descuenta por el envío Flex (0 si no te cobra); reemplaza al costo de envío Full y solo aplica con PVP ≥ ${fARS(shipThreshold())}. <b>Mix</b> = % estimado de ventas por anillo, se usa para el promedio ponderado.${f.seed?' <b style="color:var(--r)">Las tarifas cargadas son de ejemplo: reemplazalas por las tuyas.</b>':''}</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Anillo</th><th class="r">Tarifa ($)</th><th class="r">Cargo ML ($)</th><th class="r">Mix (%)</th><th></th></tr></thead>
+      <tbody>${zRows}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><i class="ti ti-route"></i> Margen por anillo</div>
+      <input class="gi" placeholder="Buscar SKU o título" value="${esc(S.search.flex||"")}" style="width:240px" oninput="srchInput('flex',this.value)">
+    </div>
+    <div class="info"><i class="ti ti-info-circle"></i> ${n} SKU con PVP cargado · promedio Full <b>${fPct(n?sumFull/n:0)}</b> vs Flex ponderado <b>${fPct(n?sumFlex/n:0)}</b> · <b>${mejoran}</b> mejoran con Flex.${list.length>300?" Mostrando los primeros 300.":""}</div>
+    <div class="tbl-wrap"><table>
+      <thead>
+        <tr><th colspan="6"></th>${hdr}<th></th></tr>
+        <tr><th>SKU</th><th>Título</th><th class="r">PVP</th><th class="r">Envío Full</th><th class="r">Margen Full</th><th class="r">%</th>
+        ${f.zonas.map(()=>'<th class="r">Margen</th><th class="r">% / Δ</th>').join("")}
+        <th class="r">% pond.</th></tr>
+      </thead>
+      <tbody>${body||'<tr><td colspan="20" class="dim">Sin productos con PVP cargado.</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
 function renderPromos(){
   const el=document.getElementById("tab-promos");
   const est=getEstruct(S.selMonth);
@@ -1578,6 +1688,7 @@ function render(){
   else if(S.tab==="cf")      renderCF();
   else if(S.tab==="pricing") renderPricing();
   else if(S.tab==="precios") renderPrecios();
+  else if(S.tab==="flex")    renderFlex();
   else if(S.tab==="promos")  renderPromos();
   else if(S.tab==="tn")      renderTN();
   else if(S.tab==="ia")      renderIA();
@@ -1612,6 +1723,7 @@ function render(){
   const scf=ld("gh_cffields",null);if(scf&&Array.isArray(scf)&&scf.length)S.cfFields=scf;
   const st=ld("gh_tiers",null);if(st)S.tiers=st;
   const ssh=ld("gh_ship",null);if(ssh&&ssh.freeThreshold!=null)S.shipCfg={...S.shipCfg,...ssh};
+  const sfx=ld("gh_flex",null);if(sfx&&sfx.zonas)S.flex=sfx;
   const ssk=ld("gh_shipbysku",null);S.shipBySku={...DEFAULT_SHIP_BYSKU,...(ssk||{})};
   const ssb=ld("gh_sb",null);if(ssb)S.sbCfg={...S.sbCfg,...ssb};
   const si=ld("gh_ins",null);if(si!==null)S.insRate=si;
