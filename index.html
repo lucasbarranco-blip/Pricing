@@ -712,7 +712,7 @@ function renderPricing(){
     const r=calcP({costoConIva:prod.costoConIva,pvp:conf.effPvp,commAllIn:conf.cat.c,insRt:conf.insRt,ship:conf.shipEff,estruct:est,useShip:conf.useShip});
     const sug=!conf.pvp?suggestPVP({costoConIva:prod.costoConIva,commAllIn:conf.cat.c,insRt:conf.insRt,ship:conf.shipBase,estruct:est,target:S.targetMargin,mode:conf.mode}):null;
     const chk=S.checked[prod.sku]?"checked":"";
-    const _recM=prod.mla||DEFAULT_MLA[prod.sku]||"";const _recD=DEFAULT_RECIBIS[_recM]||null;const _recReal=(_recD&&r)?(_recD.n-r.tot):null;
+    const _recM=prod.mla||DEFAULT_MLA[prod.sku]||"";const _recD=DEFAULT_RECIBIS[_recM]||null;const _recReal=(_recD&&r)?(_recD.n-r.tot):null;const _recCalc=r?(conf.effPvp-r.comm-r.fxB-(conf.useShip?nv(conf.shipEff):0)-r.dc-r.iibb):null;
     const row=(page-1)*PAGE+i+1;
     return`<tr${conf.sinStock?' style="opacity:.5"':''}>
       <td style="text-align:center"><input type="checkbox" class="chk" ${chk} onchange="toggleChk('${esc(prod.sku)}',this.checked)"></td>
@@ -734,7 +734,7 @@ function renderPricing(){
       <td class="num dim">${r?fARS(r.ins):"–"}</td>
       <td class="num dim">${est>0?fARS(est):"–"}</td>
       <td class="num"><b>${r?fARS(r.tot):"–"}</b></td>
-      <td class="num" style="border-left:1px solid var(--bd2);color:var(--o)" title="${_recD?('Recibís neto real de ML (precio − comisión − envío).'+(_recReal!=null?(' Margen real vs costo: $'+fARSn(_recReal)+' ('+(_recReal/_recD.n*100).toFixed(1)+'%).'):'')+' Precio ML: $'+fARSn(_recD.pr>0?_recD.pr:_recD.p)+'.'):'Sin publicación activa cruzada por MLA.'}">${_recD?fARS(_recD.n):"–"}</td>
+      <td class="num" style="border-left:1px solid var(--bd2);color:var(--o)" title="Recibís calculado al precio vigente (${fARSn(conf.effPvp)}): precio − comisión − cargo fijo − envío − déb/créd − IIBB.${_recD?(' Según ML: $'+fARSn(_recD.n)+' a precio ML $'+fARSn(_recD.pr>0?_recD.pr:_recD.p)+'.'):''}${_recReal!=null?(' Margen real vs costo: $'+fARSn(_recReal)+'.'):''}">${_recCalc!=null?fARS(_recCalc):"–"}${_recD?`<div style="font-size:9px;color:var(--txt3)">ML: ${fARS(_recD.n)}</div>`:""}</td>
       <td class="num" style="font-weight:600;color:${r?mCol(r.mPct):"inherit"}">${r?fARS(r.m$):"–"}</td>
       <td>${r?badge(r.mPct):"–"}</td>
       <td class="num" style="color:var(--b)">${sug?fARS(sug):conf.pvp?"–":"<span style='font-size:11px;color:var(--txt3)'>sin PVP</span>"}</td>
@@ -874,6 +874,7 @@ function renderPrecios(){
       <td class="num dim">${r?fARS(r.dc+r.iibb):"–"}</td>
       <td class="num dim">${conf.shipEff>0?fARS(conf.shipEff):"–"}</td>
       <td class="num"><b>${r?fARS(r.tot):"–"}</b></td>
+      <td class="num" style="color:var(--o)" title="Recibís al precio vigente ${fARSn(conf.effPvp)}${(()=>{const m=prod.mla||DEFAULT_MLA[prod.sku]||"";const d=DEFAULT_RECIBIS[m];return d?`. Según ML: $${fARSn(d.n)}`:""})()}">${r?fARS(conf.effPvp-r.comm-r.fxB-(conf.useShip?nv(conf.shipEff):0)-r.dc-r.iibb):"–"}${(()=>{const m=prod.mla||DEFAULT_MLA[prod.sku]||"";const d=DEFAULT_RECIBIS[m];return d?`<div style="font-size:9px;color:var(--txt3)">ML: ${fARS(d.n)}</div>`:""})()}</td>
       <td class="num" style="font-weight:600;color:${r?mCol(r.mPct):"inherit"}">${r?fARS(r.m$):"–"}</td>
       <td>${r?badge(r.mPct):"–"}</td>
       <td><button class="bi" onclick="removeFromPrecios('${esc(prod.sku)}')"><i class="ti ti-x" style="font-size:13px"></i></button></td>
@@ -887,7 +888,7 @@ function renderPrecios(){
     ${allChk.length===0
       ?`<div style="text-align:center;padding:40px;color:var(--txt3)"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3"></i>Tildá productos en Pricing &amp; P&amp;L para aprobarlos.</div>`
       :`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th class="sk">SKU</th><th>MLA</th><th>Título</th><th class="r">Costo c/IVA</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio inicial / real">Precio inicial ✎</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio promocional (opcional). Vacío = sin promo.">Precio promo ✎</th><th title="Hasta cuándo dura la promoción vigente">Promo hasta</th><th class="r">Com.ML</th><th class="r">Imp.</th><th class="r">Envío</th><th class="r">Total</th><th class="r" style="color:var(--g)">Margen $</th><th class="r">Margen %</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th class="sk">SKU</th><th>MLA</th><th>Título</th><th class="r">Costo c/IVA</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio inicial / real">Precio inicial ✎</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio promocional (opcional). Vacío = sin promo.">Precio promo ✎</th><th title="Hasta cuándo dura la promoción vigente">Promo hasta</th><th class="r">Com.ML</th><th class="r">Imp.</th><th class="r">Envío</th><th class="r">Total</th><th class="r" style="color:var(--o)" title="Neto que te liquida ML al precio vigente: precio − comisión − cargo fijo − envío − déb/créd − IIBB. Si hay dato real de ML, aparece debajo.">Recib. ML</th><th class="r" style="color:var(--g)">Margen $</th><th class="r">Margen %</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>${pagerHtml(total,page,pages,"precios")}`
     }
@@ -1258,10 +1259,10 @@ function exportPricing(){
 }
 function exportPrecios(){
   const est=getEstruct(S.selMonth);
-  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","SinStock","Com.ML$","Imp$","Envío","TotalCosto","Margen$","Margen%"]];
+  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","SinStock","Com.ML$","Imp$","Envío","TotalCosto","RecibisML","Margen$","Margen%"]];
   S.prods.filter(p=>S.checked[p.sku]||getPConf(p.sku,p).sinStock).forEach(p=>{
     const c=getPConf(p.sku,p);const r=calcP({costoConIva:p.costoConIva,pvp:c.effPvp,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipEff,estruct:est,useShip:c.useShip});
-    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.sinStock?"Sí":"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):""]);
+    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.sinStock?"Sí":"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+(c.effPvp-r.comm-r.fxB-(c.useShip?nv(c.shipEff):0)-r.dc-r.iibb).toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):""]);
   });
   dlXlsx(d,"GH_PreciosActuales");
 }
