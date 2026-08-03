@@ -1149,9 +1149,14 @@ const promoHastaCell=sku=>{
   const i=promoHastaInfo(sku);
   const hoy=new Date().toISOString().slice(0,10);
   const vencida=i.v&&i.v<hoy;
-  return `<td><input type="date" class="gi" value="${i.v}" style="width:118px;font-size:11px${i.manual?"":";color:var(--txt3)"}${vencida?";color:var(--r)":""}" title="${i.manual?"Fecha cargada a mano.":i.v?"Inferida de la promo activa en Promociones. Editá para fijarla a mano.":"Sin promo. Cargá hasta cuándo dura."}" onchange="uPConf('${esc(sku)}','promoHasta',this.value)"></td>`;
+  return `<td><input type="date" class="gi" value="${i.v}" style="width:118px;font-size:11px${i.manual?"":";color:var(--txt3)"}${vencida?";color:var(--r)":""}" title="${i.manual?"Fecha cargada a mano.":i.v?"Inferida de la promo activa en Promociones. Editá para fijarla a mano.":"Sin promo. Cargá hasta cuándo dura."}" onchange="uPConfSoft('${esc(sku)}','promoHasta',this.value)" onblur="rerenderTab()" onpaste="pasteFecha(event,'${esc(sku)}')">${i.v?`<button class="bi" style="font-size:10px;padding:1px 4px;margin-left:2px;vertical-align:middle" title="Copiar fecha (después pegala con Ctrl+V en otra fila)" onclick="copyFecha('${esc(sku)}',this)">⧉</button>`:""}</td>`;
 };
 function uPConf(sku,k,v){S.pConf={...S.pConf,[sku]:{...(S.pConf[sku]||{}),[k]:v}};sv("gh_pconf",S.pConf);S.tab==="precios"?renderPrecios():renderPricing()}
+function uPConfSoft(sku,k,v){S.pConf={...S.pConf,[sku]:{...(S.pConf[sku]||{}),[k]:v}};sv("gh_pconf",S.pConf);}
+async function copyFecha(sku,btn){const i=promoHastaInfo(sku);if(!i.v)return;const[y,m,d]=i.v.split("-");try{await navigator.clipboard.writeText(`${d}/${m}/${y}`);if(btn){const o=btn.textContent;btn.textContent="✓";setTimeout(()=>btn.textContent=o,700);}}catch(e){}}
+function parseFechaTxt(t){t=String(t||"").trim();let m=t.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);if(m)return`${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?t:null;}
+function pasteFecha(ev,sku){const t=(ev.clipboardData||window.clipboardData).getData("text");const iso=parseFechaTxt(t);if(iso){ev.preventDefault();ev.target.value=iso;uPConfSoft(sku,"promoHasta",iso);rerenderTab();}}
+function rerenderTab(){S.tab==="precios"?renderPrecios():renderPricing();}
 function toggleChk(sku,val){S.checked={...S.checked,[sku]:val};sv("gh_checked",S.checked);render()}
 function removeFromPrecios(sku){S.checked={...S.checked,[sku]:false};sv("gh_checked",S.checked);if(S.pConf[sku]&&S.pConf[sku].sinStock){S.pConf={...S.pConf,[sku]:{...S.pConf[sku],sinStock:false}};sv("gh_pconf",S.pConf);}render()}
 function clearPrecios(){if(!confirm("¿Quitar todos?"))return;S.checked={};sv("gh_checked",S.checked);render()}
@@ -1411,6 +1416,7 @@ async function loadPromosRemote(){
 const svPromos=()=>{sv("gh_promos",S.promos);pushPromosRemote();};
 let _pqT=null;
 function uPromoDraft(k,v){S.promoDraft={...S.promoDraft,[k]:v};
+  if(k==="desde"||k==="hasta")return;
   if(k==="q"){const el=document.getElementById("promo-q");const pos=el&&el.selectionStart!=null?el.selectionStart:String(v).length;
     clearTimeout(_pqT);_pqT=setTimeout(()=>{renderPromos();const n=document.getElementById("promo-q");if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(e){}}},250);}
   else renderPromos();}
