@@ -449,7 +449,7 @@ function go(t){
    SEARCH + PAGINATION helpers
 ════════════════════════════════ */
 let _sdt={};
-const srchInput=(tabId,val)=>{S.search[tabId]=val;S.page[tabId]=1;clearTimeout(_sdt[tabId]);_sdt[tabId]=setTimeout(()=>render(),300)};
+const srchInput=(tabId,val,el)=>{S.search[tabId]=val;S.page[tabId]=1;const pos=el&&el.selectionStart!=null?el.selectionStart:val.length;clearTimeout(_sdt[tabId]);_sdt[tabId]=setTimeout(()=>{render();const n=document.getElementById('srch-'+tabId);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(e){}}},300)};
 const srchFilter=(prods,tabId)=>{
   const q=(S.search[tabId]||"").toLowerCase().trim();
   if(!q)return prods;
@@ -467,7 +467,7 @@ const pagerHtml=(total,page,pages,tabId)=>{
   </div>`;
 };
 const srchBar=(tabId,ph="Buscar SKU o título…")=>
-  `<div class="srch-w"><i class="ti ti-search"></i><input class="srch" type="text" placeholder="${ph}" value="${esc(S.search[tabId]||"")}" oninput="srchInput('${tabId}',this.value)"></div>`;
+  `<div class="srch-w"><i class="ti ti-search"></i><input id="srch-${tabId}" class="srch" type="text" placeholder="${ph}" value="${esc(S.search[tabId]||"")}" oninput="srchInput('${tabId}',this.value,this)"></div>`;
 
 /* ════════════════════════════════
    TAB: PRODUCTOS
@@ -1407,7 +1407,11 @@ async function loadPromosRemote(){
   }catch(e){}
 }
 const svPromos=()=>{sv("gh_promos",S.promos);pushPromosRemote();};
-function uPromoDraft(k,v){S.promoDraft={...S.promoDraft,[k]:v};renderPromos();}
+let _pqT=null;
+function uPromoDraft(k,v){S.promoDraft={...S.promoDraft,[k]:v};
+  if(k==="q"){const el=document.getElementById("promo-q");const pos=el&&el.selectionStart!=null?el.selectionStart:String(v).length;
+    clearTimeout(_pqT);_pqT=setTimeout(()=>{renderPromos();const n=document.getElementById("promo-q");if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(e){}}},250);}
+  else renderPromos();}
 function promoPick(sku){S.promoDraft={...S.promoDraft,sku,q:""};renderPromos();}
 function promoClearDraft(){S.promoDraft={sku:null,q:"",precio:"",tipo:"relampago",evento:"",desde:"",hasta:"",nota:"",cofin:false,aporteTipo:"pct",aporteVal:""};renderPromos();}
 function addPromo(){
@@ -1552,7 +1556,7 @@ function renderFlex(){
   <div class="card">
     <div class="card-hdr">
       <div class="card-title"><i class="ti ti-route"></i> Margen por anillo</div>
-      <input class="gi" placeholder="Buscar SKU o título" value="${esc(S.search.flex||"")}" style="width:240px" oninput="srchInput('flex',this.value)">
+      <input id="srch-flex" class="gi" placeholder="Buscar SKU o título" value="${esc(S.search.flex||"")}" style="width:240px" oninput="srchInput('flex',this.value,this)">
     </div>
     <div class="info"><i class="ti ti-info-circle"></i> ${n} SKU con PVP cargado · promedio Full <b>${fPct(n?sumFull/n:0)}</b> vs Flex ponderado <b>${fPct(n?sumFlex/n:0)}</b> · <b>${mejoran}</b> mejoran con Flex.${list.length>300?" Mostrando los primeros 300.":""}</div>
     <div class="tbl-wrap"><table>
@@ -1699,7 +1703,7 @@ function renderPromos(){
     </div>
     <div class="info"><i class="ti ti-info-circle"></i> Buscá el producto, poné el <b>precio final</b> (lo que paga el comprador) y elegí el tipo. Si la promo la <b>cofinancia Mercado Libre</b>, marcá la casilla e indicá cuánto aporta ML: abajo ves el desglose <b>precio de lista → aporte ML → aporte tuyo → recibís</b> y el <b>margen real</b> (ya con el reintegro de ML). Cuando la promo termina, la eliminás con el tachito.</div>
     ${!d.sku?`<div style="max-width:520px"><label class="lbl">Producto</label>
-      <div class="srch-w" style="width:100%"><i class="ti ti-search"></i><input class="srch" style="width:100%" type="text" placeholder="Buscar por SKU o título…" value="${esc(d.q||"")}" oninput="uPromoDraft('q',this.value)"></div>
+      <div class="srch-w" style="width:100%"><i class="ti ti-search"></i><input id="promo-q" class="srch" style="width:100%" type="text" placeholder="Buscar por SKU o título…" value="${esc(d.q||"")}" oninput="uPromoDraft('q',this.value)"></div>
       ${results}</div>`:""}
     ${picked}
   </div>
