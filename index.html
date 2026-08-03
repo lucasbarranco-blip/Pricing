@@ -352,11 +352,14 @@ const getPConf=(sku,prod)=>{
   const pvp=nv(c.pvp,0);
   const pPromo=nv(c.pPromo,0);
   const pPromoCofin=!!c.pPromoCofin;
+  const pMlPct=nv(c.pMlPct,0);
   const sinStock=!!c.sinStock;
   // Precio efectivo para márgenes/costos: si la promo la cofinancia ML, el margen va sobre el PVP
   // (ML cubre el descuento); si NO la cofinancia, sobre el menor entre PVP y promo; sin promo, el PVP.
   // Base de liquidación: tu precio promo (PVP − tu descuento). El aporte de ML baja el precio al comprador pero NO cambia tu base: los cargos se calculan sobre tu precio promo.
   const effPvp=pPromo>0?(pvp>0?Math.min(pvp,pPromo):pPromo):pvp;
+  // Precio final que ve el comprador: tu precio promo menos el aporte de ML (% sobre el precio de lista)
+  const pFinal=(pPromo>0&&pPromoCofin&&pMlPct>0)?Math.max(pPromo-((pvp>0?pvp:pPromo)*pMlPct/100),0):null;
   const thr=shipThreshold();
   const mode=c.costMode||"auto"; // auto | envio | fijo
   const shipManual=nv(c.ship,0);
@@ -366,7 +369,7 @@ const getPConf=(sku,prod)=>{
   const useShip=mode==="envio"?true:mode==="fijo"?false:(effPvp>=thr);
   const shipEff=useShip?shipBase:0;
   const fxBEff=useShip?0:cargoFijo;
-  return{pvp,pPromo,pPromoCofin,sinStock,effPvp,catId:cat.id,cat,mode,ship:shipManual,shipDoc,shipBase,cargoFijo,useShip,shipEff,fxBEff,units:nv(c.units,0),insRt:nv(c.insRt,S.insRate)};
+  return{pvp,pPromo,pPromoCofin,pMlPct,pFinal,sinStock,effPvp,catId:cat.id,cat,mode,ship:shipManual,shipDoc,shipBase,cargoFijo,useShip,shipEff,fxBEff,units:nv(c.units,0),insRt:nv(c.insRt,S.insRate)};
 };
 const badge=pct=>{
   if(isNaN(pct)||pct===null)return"–";
@@ -720,7 +723,7 @@ function renderPricing(){
       <td class="sk mono">${esc(prod.sku)}</td>
       <td style="min-width:320px;white-space:normal">${esc(prod.titulo)}</td>
       <td style="background:var(--ybg)"><input class="gi n" value="${conf.pvp||""}" style="width:95px;background:transparent" placeholder="PVP…" onchange="uPConf('${esc(prod.sku)}','pvp',+this.value)"></td>
-      <td style="background:var(--ybg)"><input class="gi n" value="${conf.pPromo||""}" style="width:95px;background:transparent" placeholder="promo…" title="Precio promocional (opcional). Vacío = sin promo." onchange="uPConf('${esc(prod.sku)}','pPromo',+this.value)">${conf.pPromo>0&&conf.pvp>0&&conf.pPromo<conf.pvp?`<div style="font-size:10px;color:var(--o);text-align:center;margin-top:1px">${fPct((1-conf.pPromo/conf.pvp)*100)} OFF${conf.pPromoCofin?" · ML":""}</div>`:""}<label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:2px;cursor:pointer" title="Promo cofinanciada por Mercado Libre: ML baja aún más el precio al comprador con su aporte, pero tu liquidación no cambia — comisiones y margen se calculan sobre TU precio promo."><input type="checkbox" ${conf.pPromoCofin?"checked":""} onchange="uPConf('${esc(prod.sku)}','pPromoCofin',this.checked)" style="width:11px;height:11px;margin:0"> cofin ML</label></td>
+      <td style="background:var(--ybg)"><input class="gi n" value="${conf.pPromo||""}" style="width:95px;background:transparent" placeholder="promo…" title="Precio promocional (opcional). Vacío = sin promo." onchange="uPConf('${esc(prod.sku)}','pPromo',+this.value)">${conf.pPromo>0&&conf.pvp>0&&conf.pPromo<conf.pvp?`<div style="font-size:10px;color:var(--o);text-align:center;margin-top:1px">${fPct((1-conf.pPromo/conf.pvp)*100)} OFF${conf.pPromoCofin?" · ML":""}</div>`:""}<label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:2px;cursor:pointer" title="Promo cofinanciada por Mercado Libre: ML baja aún más el precio al comprador con su aporte, pero tu liquidación no cambia — comisiones y margen se calculan sobre TU precio promo."><input type="checkbox" ${conf.pPromoCofin?"checked":""} onchange="uPConf('${esc(prod.sku)}','pPromoCofin',this.checked)" style="width:11px;height:11px;margin:0"> cofin ML</label>${conf.pPromoCofin?`<div style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:1px">ML aporta <input class="gi n" value="${conf.pMlPct||""}" style="width:34px;font-size:9px;padding:0 2px;text-align:center" placeholder="%" title="Porcentaje del precio de lista que aporta Mercado Libre encima de tu descuento. Baja el precio final al comprador; tu liquidación no cambia." onchange="uPConf('${esc(prod.sku)}','pMlPct',+this.value)">%</div>${conf.pFinal!=null?`<div style="font-size:9px;color:var(--txt2);text-align:center;margin-top:1px" title="Desglose por unidad: descuento a tu cargo (PVP − tu precio promo) + aporte de Mercado Libre. Tu gasto termina en tu precio promo; de ahí para abajo lo pone ML.">tuyo −${fARS(Math.max((conf.pvp>0?conf.pvp:conf.pPromo)-conf.pPromo,0))} · ML −${fARS((conf.pvp>0?conf.pvp:conf.pPromo)*conf.pMlPct/100)}</div><div style="font-size:10px;color:var(--g);text-align:center;margin-top:1px;font-weight:600" title="Precio final que paga el comprador: tu precio promo ${fARSn(conf.pPromo)} − aporte ML ${fARSn((conf.pvp>0?conf.pvp:conf.pPromo)*conf.pMlPct/100)}. Tu liquidación sigue calculándose sobre tu precio promo.">→ ${fARS(conf.pFinal)} final${conf.pvp>0?` · ${fPct((1-conf.pFinal/conf.pvp)*100)} OFF total`:""}</div>`:""}`:""}</td>
       ${promoHastaCell(prod.sku)}
       <td style="text-align:center"><select class="gs" style="font-size:11px;padding:2px 4px;max-width:84px" title="Elegí qué costo se aplica: Auto (según los $33.000), Envío (costo del Excel) o Cargo fijo." onchange="uPConf('${esc(prod.sku)}','costMode',this.value)">
         <option value="auto"${conf.mode==="auto"?" selected":""}>Auto</option>
@@ -869,7 +872,7 @@ function renderPrecios(){
       <td style="min-width:200px">${esc(prod.titulo)}${grey?` <span style="font-size:9px;background:var(--gl);color:var(--txt3);padding:1px 5px;border-radius:3px;border:1px solid var(--bd);white-space:nowrap">SIN STOCK</span>`:""}</td>
       <td class="num">${fARS(prod.costoConIva)}</td>
       <td style="background:var(--ybg)"><input class="gi n" value="${conf.pvp||""}" style="width:95px;background:transparent;color:var(--b);font-weight:600" placeholder="PVP…" title="Precio inicial / real" onchange="uPConf('${esc(prod.sku)}','pvp',+this.value)"></td>
-      <td style="background:var(--ybg)"><input class="gi n" value="${conf.pPromo||""}" style="width:95px;background:transparent" placeholder="promo…" title="Precio promocional (opcional). Vacío = sin promo." onchange="uPConf('${esc(prod.sku)}','pPromo',+this.value)">${conf.pPromo>0&&conf.pvp>0&&conf.pPromo<conf.pvp?`<div style="font-size:10px;color:var(--o);text-align:center;margin-top:1px">${fPct((1-conf.pPromo/conf.pvp)*100)} OFF${conf.pPromoCofin?" · ML":""}</div>`:""}<label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:2px;cursor:pointer" title="Promo cofinanciada por Mercado Libre: ML baja aún más el precio al comprador con su aporte, pero tu liquidación no cambia — comisiones y margen se calculan sobre TU precio promo."><input type="checkbox" ${conf.pPromoCofin?"checked":""} onchange="uPConf('${esc(prod.sku)}','pPromoCofin',this.checked)" style="width:11px;height:11px;margin:0"> cofin ML</label></td>
+      <td style="background:var(--ybg)"><input class="gi n" value="${conf.pPromo||""}" style="width:95px;background:transparent" placeholder="promo…" title="Precio promocional (opcional). Vacío = sin promo." onchange="uPConf('${esc(prod.sku)}','pPromo',+this.value)">${conf.pPromo>0&&conf.pvp>0&&conf.pPromo<conf.pvp?`<div style="font-size:10px;color:var(--o);text-align:center;margin-top:1px">${fPct((1-conf.pPromo/conf.pvp)*100)} OFF${conf.pPromoCofin?" · ML":""}</div>`:""}<label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:2px;cursor:pointer" title="Promo cofinanciada por Mercado Libre: ML baja aún más el precio al comprador con su aporte, pero tu liquidación no cambia — comisiones y margen se calculan sobre TU precio promo."><input type="checkbox" ${conf.pPromoCofin?"checked":""} onchange="uPConf('${esc(prod.sku)}','pPromoCofin',this.checked)" style="width:11px;height:11px;margin:0"> cofin ML</label>${conf.pPromoCofin?`<div style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:9px;color:var(--txt3);margin-top:1px">ML aporta <input class="gi n" value="${conf.pMlPct||""}" style="width:34px;font-size:9px;padding:0 2px;text-align:center" placeholder="%" title="Porcentaje del precio de lista que aporta Mercado Libre encima de tu descuento. Baja el precio final al comprador; tu liquidación no cambia." onchange="uPConf('${esc(prod.sku)}','pMlPct',+this.value)">%</div>${conf.pFinal!=null?`<div style="font-size:9px;color:var(--txt2);text-align:center;margin-top:1px" title="Desglose por unidad: descuento a tu cargo (PVP − tu precio promo) + aporte de Mercado Libre. Tu gasto termina en tu precio promo; de ahí para abajo lo pone ML.">tuyo −${fARS(Math.max((conf.pvp>0?conf.pvp:conf.pPromo)-conf.pPromo,0))} · ML −${fARS((conf.pvp>0?conf.pvp:conf.pPromo)*conf.pMlPct/100)}</div><div style="font-size:10px;color:var(--g);text-align:center;margin-top:1px;font-weight:600" title="Precio final que paga el comprador: tu precio promo ${fARSn(conf.pPromo)} − aporte ML ${fARSn((conf.pvp>0?conf.pvp:conf.pPromo)*conf.pMlPct/100)}. Tu liquidación sigue calculándose sobre tu precio promo.">→ ${fARS(conf.pFinal)} final${conf.pvp>0?` · ${fPct((1-conf.pFinal/conf.pvp)*100)} OFF total`:""}</div>`:""}`:""}</td>
       ${promoHastaCell(prod.sku)}
       <td class="num dim">${r?fARS(r.comm):"–"}</td>
       <td class="num dim">${r?fARS(r.dc+r.iibb):"–"}</td>
@@ -1250,20 +1253,20 @@ function exportProds(){
 }
 function exportPricing(){
   const est=getEstruct(S.selMonth);
-  const d=[["Revisado","SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","SinStock","Envío","Uni/Mes","Comisión%","Comisión$","CargoFijo","Imp$","Insumos$","Estructural","TotalCosto","Ganancia$","Margen%","PVPSugerido"]];
+  const d=[["Revisado","SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","PrecioFinal","SinStock","Envío","Uni/Mes","Comisión%","Comisión$","CargoFijo","Imp$","Insumos$","Estructural","TotalCosto","Ganancia$","Margen%","PVPSugerido"]];
   S.prods.forEach(p=>{
     const c=getPConf(p.sku,p);const r=calcP({costoConIva:p.costoConIva,pvp:c.effPvp,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipEff,estruct:est,useShip:c.useShip});
     const sug=suggestPVP({costoConIva:p.costoConIva,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipBase,estruct:est,target:S.targetMargin,mode:c.mode});
-    d.push([S.checked[p.sku]?"TRUE":"FALSE",p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.sinStock?"Sí":"",c.shipEff,c.units,c.cat.c,r?+r.comm.toFixed(0):"",r?+r.fxB.toFixed(0):"",r?+(r.dc+r.iibb).toFixed(0):"",r?+r.ins.toFixed(0):"",+est.toFixed(0),r?+r.tot.toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):"",sug||""]);
+    d.push([S.checked[p.sku]?"TRUE":"FALSE",p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",c.shipEff,c.units,c.cat.c,r?+r.comm.toFixed(0):"",r?+r.fxB.toFixed(0):"",r?+(r.dc+r.iibb).toFixed(0):"",r?+r.ins.toFixed(0):"",+est.toFixed(0),r?+r.tot.toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):"",sug||""]);
   });
   dlXlsx(d,"GH_Pricing_"+S.selMonth);
 }
 function exportPrecios(){
   const est=getEstruct(S.selMonth);
-  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","SinStock","Com.ML$","Imp$","Envío","TotalCosto","RecibisML","Margen$","Margen%"]];
+  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","PrecioFinal","SinStock","Com.ML$","Imp$","Envío","TotalCosto","RecibisML","Margen$","Margen%"]];
   S.prods.filter(p=>S.checked[p.sku]||getPConf(p.sku,p).sinStock).forEach(p=>{
     const c=getPConf(p.sku,p);const r=calcP({costoConIva:p.costoConIva,pvp:c.effPvp,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipEff,estruct:est,useShip:c.useShip});
-    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.sinStock?"Sí":"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+(c.effPvp-r.comm-r.fxB-(c.useShip?nv(c.shipEff):0)-r.dc-r.iibb).toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):""]);
+    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+(c.effPvp-r.comm-r.fxB-(c.useShip?nv(c.shipEff):0)-r.dc-r.iibb).toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):""]);
   });
   dlXlsx(d,"GH_PreciosActuales");
 }
