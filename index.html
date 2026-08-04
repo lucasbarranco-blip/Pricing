@@ -1390,6 +1390,46 @@ function syncUnmute(){
   _upFirst=[];
 }
 
+/* ── Refresco automático entre computadoras: cada 2 min baja lo que cambió en la nube y lo aplica sin recargar ── */
+let _lastSyncTs={};
+function applyRemoteKey(k,v){
+  try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}
+  if(k==="gh_prods"&&Array.isArray(v)&&v.length){S.prods=v;S.nextId=Math.max(0,...S.prods.map(p=>p.id))+1;}
+  else if(k==="gh_pconf"&&v)S.pConf=v;
+  else if(k==="gh_shipbysku")S.shipBySku={...DEFAULT_SHIP_BYSKU,...(v||{})};
+  else if(k==="gh_checked"&&v)S.checked=v;
+  else if(k==="gh_cats"&&v)S.cats=v;
+  else if(k==="gh_cffields"&&Array.isArray(v)&&v.length)S.cfFields=v;
+  else if(k==="gh_tiers"&&v)S.tiers=v;
+  else if(k==="gh_ship"&&v&&v.freeThreshold!=null)S.shipCfg={...S.shipCfg,...v};
+  else if(k==="gh_flex"&&v&&v.zonas)S.flex=v;
+  else if(k==="gh_ins"&&v!==null)S.insRate=v;
+  else if(k==="gh_monthly"&&v)S.monthly=v;
+  else if(k==="gh_tn")S.tn={...DEFAULT_TN,...(v||{})};
+}
+async function pollRemote(){
+  try{
+    // si el usuario está escribiendo, no tocar nada en esta ronda
+    const ae=document.activeElement;
+    if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+    const{url,key}=sbConn();
+    const r=await fetch(url+"/rest/v1/pricing_state?select=k,updated_at",{headers:sbHdr(key)});
+    if(!r.ok)return;
+    const rows=await r.json();
+    const changed=rows.filter(x=>SYNC_KEYS.indexOf(x.k)>=0&&_lastSyncTs[x.k]!==undefined&&x.updated_at>_lastSyncTs[x.k]);
+    rows.forEach(x=>{if(_lastSyncTs[x.k]===undefined)_lastSyncTs[x.k]=x.updated_at;});
+    if(changed.length){
+      const ks=changed.map(x=>x.k).join(",");
+      const r2=await fetch(url+"/rest/v1/pricing_state?select=k,v,updated_at&k=in.("+ks+")",{headers:sbHdr(key)});
+      if(r2.ok){const data=await r2.json();const was=_syncMuted;_syncMuted=true;
+        data.forEach(row=>{applyRemoteKey(row.k,row.v);_lastSyncTs[row.k]=row.updated_at;});
+        _syncMuted=was;syncMark(true);render();}
+    }
+    loadPromosRemote();
+  }catch(e){}
+}
+setInterval(pollRemote,120000);
+
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
    Permite que todo el equipo vea las mismas promos desde cualquier dispositivo. */
