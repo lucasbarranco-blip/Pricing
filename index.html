@@ -246,10 +246,23 @@ const DEF_CATS=[
   {id:15,n:"Supermercado / Alimentos",c:13.3},
 ];
 const DEF_TIERS=[
-  {id:1,label:"Hasta $15.000",  min:0,    max:15000,    costo:1095},
-  {id:2,label:"$15k – $25k",   min:15001,max:25000,    costo:2190},
-  {id:3,label:"$25k – $33k",   min:25001,max:33000,    costo:2628},
-  {id:4,label:"Más de $33k",   min:33001,max:999999999,costo:0},
+  {id:1,label:"Hasta $14.999", min:0,    max:14999,    costo:1330},
+  {id:2,label:"$15k – $24k",   min:15000,max:23999,    costo:2740},
+  {id:3,label:"$24k – $33k",   min:24000,max:32999,    costo:3320},
+  {id:4,label:"Más de $33k",   min:33000,max:999999999,costo:0},
+];
+// Costo por unidad vendida Full/correo/colecta/puntos de despacho (<$33k), vigente 01/09/2026.
+// Referencia (el margen usa la tabla Flex de arriba). Columnas: peso | ≤$14.999 | $15k-$23.999 | $24k-$32.999
+const FULL_UNIT_COST=[
+  ["Hasta 0,3 kg",1330,2740,3320],["0,3 a 0,5 kg",1370,2760,3340],["0,5 a 1 kg",1390,2780,3360],
+  ["1 a 1,5 kg",1410,2800,3380],["1,5 a 2 kg",1430,2820,3400],["2 a 3 kg",1450,2860,3470],
+  ["3 a 4 kg",1470,2910,3520],["4 a 5 kg",1500,3040,3670],["5 a 8 kg",1520,3130,3760],
+  ["8 a 10 kg",1560,3180,3910],["10 a 13 kg",1590,3220,4020],["13 a 15 kg",1620,3280,4060],
+  ["15 a 20 kg",1640,3320,4100],["20 a 25 kg",1660,3380,4170],["25 a 30 kg",1680,3410,4210],
+  ["30 a 40 kg",1700,3440,4250],["40 a 50 kg",1720,3460,4300],["50 a 60 kg",1740,3480,4320],
+  ["60 a 70 kg",1760,3510,4350],["70 a 80 kg",1780,3530,4370],["80 a 90 kg",1800,3560,4400],
+  ["90 a 100 kg",1820,3580,4420],["100 a 120 kg",1840,3600,4450],["120 a 140 kg",1860,3620,4470],
+  ["140 a 160 kg",1880,3650,4500],["160 a 180 kg",1900,3680,4520],["Más de 180 kg",1920,3700,4550],
 ];
 // Costo de ofrecer cuotas (% del precio de venta). id:0 = no ofrecer. Editable en Cargos ML.
 const DEF_CUOTAS=[
@@ -627,11 +640,19 @@ function renderML(){
     </div>
     <div>
       <div class="card">
-        <div class="card-title" style="margin-bottom:10px"><i class="ti ti-coins"></i> Cargo fijo por unidad (PVP ≤ $32.999)</div>
-        <div class="info"><i class="ti ti-info-circle"></i> Si el <b>PVP ≤ $32.999</b> se cobra este cargo por unidad y <b>no</b> envío. Actualizar según liquidaciones.</div>
+        <div class="card-title" style="margin-bottom:10px"><i class="ti ti-coins"></i> Costo por unidad — Flex / acuerdo / retiro (PVP ≤ $32.999)</div>
+        <div class="info"><i class="ti ti-info-circle"></i> Costo por unidad vendida de <b>Flex, acuerdo con el comprador y retiro en domicilio</b> (solo por precio), vigente desde el <b>01/09/2026</b>. Se cobra si el <b>PVP ≤ $32.999</b> (y no envío). <b>Es el que usa el margen.</b></div>
         <div class="tbl-wrap"><table>
           <thead><tr><th>Rango</th><th class="r">Desde</th><th class="r">Hasta</th><th class="r">Cargo fijo ($)</th></tr></thead>
           <tbody>${tRows}</tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px"><i class="ti ti-package"></i> Costo por unidad — Full / correo / colecta / puntos de despacho (referencia)</div>
+        <div class="info"><i class="ti ti-info-circle"></i> Costo por unidad vendida por <b>peso × precio</b> (usa el mayor entre peso físico y volumétrico), vigente desde el <b>01/09/2026</b>, para productos &lt; $33.000. Los kits &lt;$33k pagan un solo costo. Es <b>solo de referencia</b>: el margen se calcula con la tabla de Flex de arriba.</div>
+        <div class="tbl-wrap" style="max-height:300px;overflow:auto"><table>
+          <thead><tr><th>Peso</th><th class="r">≤ $14.999</th><th class="r">$15k–$23.999</th><th class="r">$24k–$32.999</th></tr></thead>
+          <tbody>${FULL_UNIT_COST.map(r=>`<tr><td>${esc(r[0])}</td><td class="num">${fARS(r[1])}</td><td class="num">${fARS(r[2])}</td><td class="num">${fARS(r[3])}</td></tr>`).join("")}</tbody>
         </table></div>
       </div>
       <div class="card">
@@ -1853,6 +1874,8 @@ function render(){
   const sc=ld("gh_cats",null);if(sc)S.cats=sc;
   const scf=ld("gh_cffields",null);if(scf&&Array.isArray(scf)&&scf.length)S.cfFields=scf;
   const st=ld("gh_tiers",null);if(st)S.tiers=st;
+  // Costo por unidad Flex (<$33k) vigente 01/09/2026: pisa una sola vez los valores viejos.
+  {const _tv="flex-2026-09";if(ld("gh_tiers_ver",null)!==_tv){S.tiers=[{id:1,label:"Hasta $14.999",min:0,max:14999,costo:1330},{id:2,label:"$15k – $24k",min:15000,max:23999,costo:2740},{id:3,label:"$24k – $33k",min:24000,max:32999,costo:3320},{id:4,label:"Más de $33k",min:33000,max:999999999,costo:0}];sv("gh_tiers",S.tiers);sv("gh_tiers_ver",_tv);}}
   const scu=ld("gh_cuotas",null);if(scu&&Array.isArray(scu)&&scu.length)S.cuotas=scu;
   const ssh=ld("gh_ship",null);if(ssh&&ssh.freeThreshold!=null)S.shipCfg={...S.shipCfg,...ssh};
   const sfx=ld("gh_flex",null);if(sfx&&sfx.zonas)S.flex=sfx;
