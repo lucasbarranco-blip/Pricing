@@ -1505,7 +1505,7 @@ setTimeout(rtConnect,1200);
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
    Permite que todo el equipo vea las mismas promos desde cualquier dispositivo. */
-const SB_DEF={url:"https://slfmkdtsksjatcfcfvgl.supabase.co",key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZm1rZHRza3NqYXRjZmNmdmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDMzNzgsImV4cCI6MjA5NTkxOTM3OH0.uKRquNgMXvLo2ZYGWm1ZE2WOwjeYDk_zo4cd92J2rXc"};
+const SB_DEF={url:"https://uztmoohixrmipoknjvgu.supabase.co",key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6dG1vb2hpeHJtaXBva25qdmd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDIxMDgsImV4cCI6MjEwNTcxODEwOH0.rQesWW5lFfgHcjeFX8IN0LbLgPrAFis1w3r3YlenPnI"};
 const sbConn=()=>{const c=S.sbCfg||{};return{url:(c.url||SB_DEF.url).replace(/\/$/,""),key:c.key||SB_DEF.key}};
 const sbHdr=k=>({apikey:k,Authorization:"Bearer "+k,"Content-Type":"application/json"});
 let _ppT=null;
@@ -1898,6 +1898,8 @@ function render(){
   const sfx=ld("gh_flex",null);if(sfx&&sfx.zonas)S.flex=sfx;
   const ssk=ld("gh_shipbysku",null);S.shipBySku={...DEFAULT_SHIP_BYSKU,...(ssk||{})};
   const ssb=ld("gh_sb",null);if(ssb)S.sbCfg={...S.sbCfg,...ssb};
+  // Migración: si quedó guardado el proyecto viejo de Supabase (borrado), limpiar para usar el nuevo (SB_DEF).
+  if(S.sbCfg&&S.sbCfg.url&&S.sbCfg.url.indexOf("slfmkdtsksjatcfcfvgl")>=0){S.sbCfg={...S.sbCfg,url:"",key:""};sv("gh_sb",S.sbCfg);}
   const si=ld("gh_ins",null);if(si!==null)S.insRate=si;
   const sm=ld("gh_monthly",null);if(sm)S.monthly=sm;
   const sp=ld("gh_pconf",null);if(sp)S.pConf=sp;
