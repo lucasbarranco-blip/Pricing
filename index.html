@@ -234,7 +234,7 @@ const DEF_CATS=[
   {id:3,n:"Toallas / Accesorios Baño",c:14.5},
   {id:4,n:"Alfombras y Tapetes",c:14.5},
   {id:5,n:"Almohadas y Rellenos",c:14.5},
-  {id:6,n:"Mantas / Edredones / Acolchados",c:14.5},
+  {id:6,n:"Mantas / Edredones / Acolchados (otros)",c:14.5},
   {id:7,n:"Decoración del Hogar",c:14.5},
   {id:8,n:"Computación",c:16.5},
   {id:9,n:"Electrónica / Audio",c:16.5},
@@ -244,6 +244,9 @@ const DEF_CATS=[
   {id:13,n:"Herramientas / Construcción",c:14.0},
   {id:14,n:"Bebés y Niños",c:14.0},
   {id:15,n:"Supermercado / Alimentos",c:13.3},
+  {id:16,n:"Acolchados",c:14.5},
+  {id:17,n:"Edredones / Cubre edredón",c:14.0},
+  {id:18,n:"Mantas (sillón)",c:14.3},
 ];
 const DEF_TIERS=[
   {id:1,label:"Hasta $14.999", min:0,    max:14999,    costo:1330},
@@ -1428,12 +1431,12 @@ const pushStateRemote=(k,v)=>{
 };
 async function loadStateRemote(){
   try{const{url,key}=sbConn();
-    const r=await fetch(url+"/rest/v1/pricing_state?select=k,v",{headers:sbHdr(key)});
+    const r=await fetch(url+"/rest/v1/pricing_state?select=k,v,updated_at",{headers:sbHdr(key)});
     if(!r.ok){console.warn("sync pull",r.status);syncMark(false);return false;}
     const rows=await r.json();
     if(!Array.isArray(rows))return false;
     const seen=new Set();
-    rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0||row.v==null)return;seen.add(row.k);try{localStorage.setItem(row.k,JSON.stringify(row.v))}catch(e){}});
+    rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0)return;if(row.updated_at)_lastSyncTs[row.k]=row.updated_at;if(row.v==null)return;seen.add(row.k);try{localStorage.setItem(row.k,JSON.stringify(row.v))}catch(e){}});
     _upFirst=SYNC_KEYS.filter(k=>!seen.has(k));
     syncMark(true);
     return true;
@@ -1471,8 +1474,7 @@ async function pollRemote(){
     const r=await fetch(url+"/rest/v1/pricing_state?select=k,updated_at",{headers:sbHdr(key)});
     if(!r.ok)return;
     const rows=await r.json();
-    const changed=rows.filter(x=>SYNC_KEYS.indexOf(x.k)>=0&&_lastSyncTs[x.k]!==undefined&&x.updated_at>_lastSyncTs[x.k]);
-    rows.forEach(x=>{if(_lastSyncTs[x.k]===undefined)_lastSyncTs[x.k]=x.updated_at;});
+    const changed=rows.filter(x=>SYNC_KEYS.indexOf(x.k)>=0&&(_lastSyncTs[x.k]===undefined||x.updated_at>_lastSyncTs[x.k]));
     if(changed.length){
       const ks=changed.map(x=>x.k).join(",");
       const r2=await fetch(url+"/rest/v1/pricing_state?select=k,v,updated_at&k=in.("+ks+")",{headers:sbHdr(key)});
@@ -1483,7 +1485,8 @@ async function pollRemote(){
     loadPromosRemote();
   }catch(e){}
 }
-setInterval(pollRemote,120000);
+setInterval(pollRemote,30000);
+setTimeout(pollRemote,8000);
 
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
@@ -1890,6 +1893,8 @@ function render(){
   let _pvpFill=0;
   for(const sk in PUB_PVP){const cur=S.pConf[sk];if(!cur||!(nv(cur.pvp)>0)){S.pConf[sk]={...(cur||{}),pvp:PUB_PVP[sk]};_pvpFill++;}}
   if(_pvpFill>0)sv("gh_pconf",S.pConf);
+  // Split comisiones ML: Acolchados 14.5 (16), Edredones 14.0 (17), Mantas sillón 14.3 (18). Reasigna la cat 6 por título, una sola vez.
+  {const _cv="cat-split-2026-09";if(ld("gh_catsplit_ver",null)!==_cv){let _n=0;S.prods=S.prods.map(p=>{const cur=(S.pConf[p.sku]&&S.pConf[p.sku].catId)||p.defCatId||1;if(cur!==6)return p;const t=String(p.titulo||"").toLowerCase();let nc=6;if(t.includes("acolchado"))nc=16;else if(t.includes("edredon")||t.includes("edredón"))nc=17;else if(t.includes("manta")&&!t.includes("mantel"))nc=18;if(nc===6)return p;_n++;if(S.pConf[p.sku]&&S.pConf[p.sku].catId)S.pConf[p.sku]={...S.pConf[p.sku],catId:nc};return{...p,defCatId:nc};});if(_n>0){sv("gh_prods",S.prods);sv("gh_pconf",S.pConf);}sv("gh_catsplit_ver",_cv);}}
   const stn=ld("gh_tn",null);S.tn={...DEFAULT_TN,...(stn||{})};
   const sch=ld("gh_checked",null);if(sch)S.checked=sch;
   const spr=ld("gh_promos",null);if(spr&&Array.isArray(spr))S.promos=spr;
