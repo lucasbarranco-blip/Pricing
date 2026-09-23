@@ -1427,7 +1427,7 @@ const pushStateRemote=(k,v)=>{
       const r=await fetch(url+"/rest/v1/pricing_state?on_conflict=k",{method:"POST",headers:{...sbHdr(key),Prefer:"resolution=merge-duplicates"},body:JSON.stringify([{k,v,updated_at:new Date().toISOString()}])});
       if(!r.ok){console.warn("sync push",k,r.status,await r.text());syncMark(false);}else syncMark(true);
     }catch(e){console.warn("sync push",k,e);syncMark(false);}
-  },1000);
+  },300);
 };
 async function loadStateRemote(){
   try{const{url,key}=sbConn();
@@ -1485,8 +1485,22 @@ async function pollRemote(){
     loadPromosRemote();
   }catch(e){}
 }
-setInterval(pollRemote,30000);
-setTimeout(pollRemote,8000);
+setInterval(pollRemote,3000);
+setTimeout(pollRemote,1500);
+// ── Tiempo real: WebSocket a Supabase Realtime (postgres_changes en pricing_state). Si está habilitado, el cambio llega al instante; el poll de 3s queda de respaldo. ──
+let _rtWs=null,_rtRef=0,_rtHb=null,_rtTries=0;
+function rtConnect(){
+  try{
+    const{url,key}=sbConn();if(!url||!key)return;
+    const ws=new WebSocket(url.replace(/^http/,"ws")+"/realtime/v1/websocket?apikey="+encodeURIComponent(key)+"&vsn=1.0.0");
+    _rtWs=ws;
+    ws.onopen=()=>{_rtTries=0;try{ws.send(JSON.stringify({topic:"realtime:pricing_state",event:"phx_join",payload:{config:{postgres_changes:[{event:"*",schema:"public",table:"pricing_state"}]}},ref:String(++_rtRef),join_ref:String(_rtRef)}))}catch(e){}clearInterval(_rtHb);_rtHb=setInterval(()=>{try{ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:String(++_rtRef)}))}catch(e){}},25000)};
+    ws.onmessage=(ev)=>{try{const m=JSON.parse(ev.data);if(m.event!=="postgres_changes")return;const d=(m.payload&&(m.payload.data||m.payload))||{};const rec=d.record||d.new||d.old;if(!rec||!rec.k||SYNC_KEYS.indexOf(rec.k)<0)return;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;const was=_syncMuted;_syncMuted=true;applyRemoteKey(rec.k,rec.v);_lastSyncTs[rec.k]=rec.updated_at||new Date().toISOString();_syncMuted=was;syncMark(true);render()}catch(e){}};
+    ws.onerror=()=>{try{ws.close()}catch(e){}};
+    ws.onclose=()=>{clearInterval(_rtHb);_rtTries++;setTimeout(rtConnect,Math.min(20000,2000*_rtTries))};
+  }catch(e){setTimeout(rtConnect,10000)}
+}
+setTimeout(rtConnect,1200);
 
 /* ── Sync remoto de promociones (Supabase, tabla pricing_promos) ──
    Documento único (id=1) con el array completo. Last-write-wins.
