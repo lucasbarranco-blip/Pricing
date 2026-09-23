@@ -1417,7 +1417,9 @@ const calcCoFund=(prod,conf,promo,est)=>{
    Al abrir la app se baja el estado remoto y pisa lo local; cada guardado lo sube.
    Last-write-wins por clave. */
 const SYNC_KEYS=["gh_prods","gh_cats","gh_cffields","gh_tiers","gh_cuotas","gh_ship","gh_shipbysku","gh_ins","gh_monthly","gh_pconf","gh_tn","gh_checked","gh_flex"];
-let _syncMuted=true,_psT={},_upFirst=[];
+// Claves tipo mapa (objeto por SKU): se FUSIONAN, nunca se reemplazan en bloque, para no borrar datos locales (ej. precios promo).
+const MAP_KEYS=["gh_pconf","gh_checked","gh_tn","gh_shipbysku","gh_monthly"];
+let _syncMuted=true,_psT={},_upFirst=[],_mergedPush=[];
 function syncMark(ok){const d=document.getElementById("sdot");if(!d)return;d.title=ok?"Sincronizado en la nube":"Sin conexión con Supabase (guardado solo local)";d.style.background=ok?"":"var(--dn)";}
 const pushStateRemote=(k,v)=>{
   if(_syncMuted||SYNC_KEYS.indexOf(k)<0)return;
@@ -1436,7 +1438,14 @@ async function loadStateRemote(){
     const rows=await r.json();
     if(!Array.isArray(rows))return false;
     const seen=new Set();
-    rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0)return;if(row.updated_at)_lastSyncTs[row.k]=row.updated_at;if(row.v==null)return;seen.add(row.k);try{localStorage.setItem(row.k,JSON.stringify(row.v))}catch(e){}});
+    rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0)return;if(row.updated_at)_lastSyncTs[row.k]=row.updated_at;if(row.v==null)return;seen.add(row.k);try{
+      if(MAP_KEYS.indexOf(row.k)>=0&&row.v&&typeof row.v==="object"&&!Array.isArray(row.v)){
+        const loc=ld(row.k,null);const hasLoc=loc&&typeof loc==="object"&&Object.keys(loc).length>0;
+        const merged=hasLoc?{...row.v,...loc}:row.v; // al abrir, lo LOCAL gana: nunca se pierde lo tuyo
+        localStorage.setItem(row.k,JSON.stringify(merged));
+        if(hasLoc)_mergedPush.push(row.k); // subir la unión para que la nube tenga tus datos locales
+      }else{localStorage.setItem(row.k,JSON.stringify(row.v));}
+    }catch(e){}});
     _upFirst=SYNC_KEYS.filter(k=>!seen.has(k));
     syncMark(true);
     return true;
@@ -1446,12 +1455,16 @@ function syncUnmute(){
   _syncMuted=false;
   _upFirst.forEach(k=>{const v=ld(k,null);if(v!=null)pushStateRemote(k,v)});
   _upFirst=[];
+  // Subir las claves-mapa fusionadas al abrir, para que la nube reciba lo que solo estaba local.
+  [...new Set(_mergedPush)].forEach(k=>{const v=ld(k,null);if(v!=null)pushStateRemote(k,v)});
+  _mergedPush=[];
 }
 
 /* ── Refresco automático entre computadoras: cada 2 min baja lo que cambió en la nube y lo aplica sin recargar ── */
 let _lastSyncTs={};
 function applyRemoteKey(k,v){
-  try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}
+  // Para claves-mapa, fusionar (el remoto gana por SKU, pero se conservan los SKU que solo están local).
+  try{if(MAP_KEYS.indexOf(k)>=0&&v&&typeof v==="object"&&!Array.isArray(v)){const loc=ld(k,null);if(loc&&typeof loc==="object")v={...loc,...v};}localStorage.setItem(k,JSON.stringify(v))}catch(e){}
   if(k==="gh_prods"&&Array.isArray(v)&&v.length){S.prods=v;S.nextId=Math.max(0,...S.prods.map(p=>p.id))+1;}
   else if(k==="gh_pconf"&&v)S.pConf=v;
   else if(k==="gh_shipbysku")S.shipBySku={...DEFAULT_SHIP_BYSKU,...(v||{})};
