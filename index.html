@@ -303,7 +303,7 @@ const S={
   cfFields:CF_FIELDS.map(f=>({...f})),
   insRate:1,monthly:{},pConf:{},tn:{},checked:{},
   search:{},page:{},selMonth:"",targetMargin:20,
-  pubFilter:"all",showApproved:false,sort:{pricing:{col:null,dir:1}},
+  pubFilter:"all",showApproved:false,sort:{pricing:{col:null,dir:1},precios:{col:null,dir:1}},
   nextId:0,importState:null,aiMsgs:[],aiLoading:false,
   flex:null,
   promos:[],promoDraft:{sku:null,q:"",precio:"",tipo:"relampago",evento:"",desde:"",hasta:"",nota:""},
@@ -446,6 +446,43 @@ function setSort(col){
   S.sort.pricing=s;S.page.pricing=1;renderPricing();
 }
 const sIco=col=>{const s=S.sort.pricing||{};const a=s.col===col;const ic=a?(s.dir===1?"ti-chevron-up":"ti-chevron-down"):"ti-arrows-sort";return`<i class="ti ${ic}" style="font-size:10px;opacity:${a?1:.35};margin-left:3px;vertical-align:middle"></i>`;};
+
+/* ── Ordenamiento de la tabla Precios Actuales ── */
+const pSortValP=(prod,col,est)=>{
+  const conf=getPConf(prod.sku,prod);
+  const r=calcP({costoConIva:prod.costoConIva,pvp:conf.effPvp,commAllIn:conf.cat.c,insRt:conf.insRt,ship:conf.shipEff,estruct:est,useShip:conf.useShip,cuotaRt:conf.cuotaRt});
+  switch(col){
+    case"sku":return(prod.sku||"").toLowerCase();
+    case"mla":return(prod.mla||"").toLowerCase();
+    case"titulo":return(prod.titulo||"").toLowerCase();
+    case"costo":return nv(prod.costoConIva);
+    case"pvp":return conf.pvp||0;
+    case"promo":return conf.pPromo||0;
+    case"promohasta":{const i=promoHastaInfo(prod.sku);return i&&i.v?i.v:"";}
+    case"comm":return r?r.comm:-1;
+    case"imp":return r?(r.dc+r.iibb):-1;
+    case"envio":return conf.shipEff||0;
+    case"total":return r?r.tot:-1;
+    case"recib":return r?(conf.effPvp-r.comm-r.fxB-(conf.useShip?nv(conf.shipEff):0)-r.dc-r.iibb):-1e15;
+    case"mp":return r?r.m$:-1e15;
+    case"mpct":return r?r.mPct:-1e9;
+    default:return 0;
+  }
+};
+const sortPrecios=(list,est)=>{
+  const s=S.sort.precios;if(!s||!s.col)return list;
+  return[...list].sort((a,b)=>{
+    const va=pSortValP(a,s.col,est),vb=pSortValP(b,s.col,est);
+    if(typeof va==="string"||typeof vb==="string")return s.dir*String(va).localeCompare(String(vb),"es");
+    return s.dir*((va||0)-(vb||0));
+  });
+};
+function setSortP(col){
+  const s=S.sort.precios||{col:null,dir:1};
+  if(s.col===col)s.dir=-s.dir;else{s.col=col;s.dir=1;}
+  S.sort.precios=s;S.page.precios=1;renderPrecios();
+}
+const sIcoP=col=>{const s=S.sort.precios||{};const a=s.col===col;const ic=a?(s.dir===1?"ti-chevron-up":"ti-chevron-down"):"ti-arrows-sort";return`<i class="ti ${ic}" style="font-size:10px;opacity:${a?1:.35};margin-left:3px;vertical-align:middle"></i>`;};
 
 /* ── Publicados (según el Excel de publicaciones ML) ── */
 const isPub=sku=>!!PUB_SET[String(sku||"").trim()];
@@ -916,7 +953,8 @@ function renderPrecios(){
   const el=document.getElementById("tab-precios");
   const est=getEstruct(S.selMonth);
   const allChk=S.prods.filter(p=>S.checked[p.sku]||getPConf(p.sku,p).sinStock);
-  const filt=applyPub(srchFilter(allChk,"precios"));
+  let filt=applyPub(srchFilter(allChk,"precios"));
+  filt=sortPrecios(filt,est);
   const {items,total,page,pages}=getPage(filt,"precios");
   const rows=items.map((prod,i)=>{
     const conf=getPConf(prod.sku,prod);
@@ -949,7 +987,7 @@ function renderPrecios(){
     ${allChk.length===0
       ?`<div style="text-align:center;padding:40px;color:var(--txt3)"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3"></i>Tildá productos en Pricing &amp; P&amp;L para aprobarlos.</div>`
       :`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th class="sk">SKU</th><th>MLA</th><th>Título</th><th class="r">Costo c/IVA</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio inicial / real">Precio inicial ✎</th><th class="r" style="background:var(--ybg);color:var(--yd)" title="Precio promocional (opcional). Vacío = sin promo.">Precio promo ✎</th><th title="Hasta cuándo dura la promoción vigente">Promo hasta</th><th class="r">Com.ML</th><th class="r">Imp.</th><th class="r">Envío</th><th class="r">Total</th><th class="r" style="color:var(--o)" title="Neto que te liquida ML al precio vigente: precio − comisión − cargo fijo − envío − déb/créd − IIBB. Si hay dato real de ML, aparece debajo.">Recib. ML</th><th class="r" style="color:var(--g)">Margen $</th><th class="r">Margen %</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th class="sk" style="cursor:pointer" onclick="setSortP('sku')">SKU${sIcoP('sku')}</th><th style="cursor:pointer" onclick="setSortP('mla')">MLA${sIcoP('mla')}</th><th style="cursor:pointer" onclick="setSortP('titulo')">Título${sIcoP('titulo')}</th><th class="r" style="cursor:pointer" onclick="setSortP('costo')">Costo c/IVA${sIcoP('costo')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio inicial / real" onclick="setSortP('pvp')">Precio inicial ✎${sIcoP('pvp')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio promocional (opcional). Vacío = sin promo." onclick="setSortP('promo')">Precio promo ✎${sIcoP('promo')}</th><th style="cursor:pointer" title="Hasta cuándo dura la promoción vigente" onclick="setSortP('promohasta')">Promo hasta${sIcoP('promohasta')}</th><th class="r" style="cursor:pointer" onclick="setSortP('comm')">Com.ML${sIcoP('comm')}</th><th class="r" style="cursor:pointer" onclick="setSortP('imp')">Imp.${sIcoP('imp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('envio')">Envío${sIcoP('envio')}</th><th class="r" style="cursor:pointer" onclick="setSortP('total')">Total${sIcoP('total')}</th><th class="r" style="color:var(--o);cursor:pointer" title="Neto que te liquida ML al precio vigente: precio − comisión − cargo fijo − envío − déb/créd − IIBB. Si hay dato real de ML, aparece debajo." onclick="setSortP('recib')">Recib. ML${sIcoP('recib')}</th><th class="r" style="color:var(--g);cursor:pointer" onclick="setSortP('mp')">Margen $${sIcoP('mp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('mpct')">Margen %${sIcoP('mpct')}</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>${pagerHtml(total,page,pages,"precios")}`
     }
