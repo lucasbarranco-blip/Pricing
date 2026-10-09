@@ -401,7 +401,7 @@ const getPConf=(sku,prod)=>{
   const useShip=mode==="envio"?true:mode==="fijo"?false:(effPvp>=thr);
   const shipEff=useShip?shipBase:0;
   const fxBEff=useShip?0:cargoFijo;
-  return{pvp,pPromo,pPromoCofin,pMlPct,pFinal,aporteML,miCargo,sinStock,cuotaId,cuotaRt,effPvp,catId:cat.id,cat,mode,ship:shipManual,shipDoc,shipBase,cargoFijo,useShip,shipEff,fxBEff,units:nv(c.units,0),insRt:nv(c.insRt,S.insRate)};
+  return{pvp,pPromo,pPromoCofin,pMlPct,pFinal,aporteML,miCargo,sinStock,cuotaId,cuotaRt,effPvp,catId:cat.id,cat,mode,ship:shipManual,shipDoc,shipBase,cargoFijo,useShip,shipEff,fxBEff,units:nv(c.units,0),insRt:nv(c.insRt,S.insRate),obs:c.obs||""};
 };
 const badge=pct=>{
   if(isNaN(pct)||pct===null)return"–";
@@ -834,6 +834,7 @@ function renderPricing(){
       <td>${r?badge(r.mPct):"–"}</td>
       <td class="num" style="color:var(--b)">${sug?fARS(sug):conf.pvp?"–":"<span style='font-size:11px;color:var(--txt3)'>sin PVP</span>"}</td>
       <td style="text-align:center;opacity:1"><input type="checkbox" class="chk" ${conf.sinStock?"checked":""} title="Sin stock: pasa a Precios Actuales grisado" onchange="uPConf('${esc(prod.sku)}','sinStock',this.checked)"></td>
+      <td><input class="gi" value="${esc(conf.obs)}" style="width:170px;font-size:11px" placeholder="Observaciones…" title="Notas libres del producto" oninput="uPConfSoft('${esc(prod.sku)}','obs',this.value)"></td>
     </tr>`;
   }).join("");
 
@@ -911,8 +912,9 @@ function renderPricing(){
         <th class="r" style="cursor:pointer" onclick="setSort('mpct')">Margen %${sIco('mpct')}</th>
         <th class="r" style="color:var(--b);cursor:pointer" onclick="setSort('sug')">PVP Sug.${sIco('sug')}</th>
         <th class="r" title="Sin stock: pasa a Precios Actuales grisado">Sin stock</th>
+        <th title="Notas libres del producto (se guardan y sincronizan)">Observaciones</th>
       </tr></thead>
-      <tbody>${rows||"<tr><td colspan='20' style='text-align:center;padding:24px;color:var(--txt3)'>Sin productos.</td></tr>"}</tbody>
+      <tbody>${rows||"<tr><td colspan='21' style='text-align:center;padding:24px;color:var(--txt3)'>Sin productos.</td></tr>"}</tbody>
     </table></div>
     ${pagerHtml(total,page,pages,"pricing")}
   </div>
@@ -976,6 +978,7 @@ function renderPrecios(){
       <td class="num" style="color:var(--o)" title="Recibís al precio vigente ${fARSn(conf.effPvp)}${(()=>{const m=prod.mla||DEFAULT_MLA[prod.sku]||"";const d=DEFAULT_RECIBIS[m];return d?`. Según ML: $${fARSn(d.n)}`:""})()}">${r?fARS(conf.effPvp-r.comm-r.fxB-(conf.useShip?nv(conf.shipEff):0)-r.dc-r.iibb):"–"}${(()=>{const m=prod.mla||DEFAULT_MLA[prod.sku]||"";const d=DEFAULT_RECIBIS[m];return d?`<div style="font-size:9px;color:var(--txt3)">ML: ${fARS(d.n)}</div>`:""})()}</td>
       <td class="num" style="font-weight:600;color:${r?mCol(r.mPct):"inherit"}">${r?fARS(r.m$):"–"}</td>
       <td>${r?badge(r.mPct):"–"}</td>
+      <td><input class="gi" value="${esc(conf.obs)}" style="width:170px;font-size:11px;text-align:left" placeholder="Observaciones…" title="Notas libres del producto" oninput="uPConfSoft('${esc(prod.sku)}','obs',this.value)"></td>
       <td><button class="bi" onclick="removeFromPrecios('${esc(prod.sku)}')"><i class="ti ti-x" style="font-size:13px"></i></button></td>
     </tr>`;
   }).join("");
@@ -987,7 +990,7 @@ function renderPrecios(){
     ${allChk.length===0
       ?`<div style="text-align:center;padding:40px;color:var(--txt3)"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3"></i>Tildá productos en Pricing &amp; P&amp;L para aprobarlos.</div>`
       :`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th class="sk" style="cursor:pointer" onclick="setSortP('sku')">SKU${sIcoP('sku')}</th><th style="cursor:pointer" onclick="setSortP('mla')">MLA${sIcoP('mla')}</th><th style="cursor:pointer" onclick="setSortP('titulo')">Título${sIcoP('titulo')}</th><th class="r" style="cursor:pointer" onclick="setSortP('costo')">Costo c/IVA${sIcoP('costo')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio inicial / real" onclick="setSortP('pvp')">Precio inicial ✎${sIcoP('pvp')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio promocional (opcional). Vacío = sin promo." onclick="setSortP('promo')">Precio promo ✎${sIcoP('promo')}</th><th style="cursor:pointer" title="Hasta cuándo dura la promoción vigente" onclick="setSortP('promohasta')">Promo hasta${sIcoP('promohasta')}</th><th class="r" style="cursor:pointer" onclick="setSortP('comm')">Com.ML${sIcoP('comm')}</th><th class="r" style="cursor:pointer" onclick="setSortP('imp')">Imp.${sIcoP('imp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('envio')">Envío${sIcoP('envio')}</th><th class="r" style="cursor:pointer" onclick="setSortP('total')">Total${sIcoP('total')}</th><th class="r" style="color:var(--o);cursor:pointer" title="Neto que te liquida ML al precio vigente: precio − comisión − cargo fijo − envío − déb/créd − IIBB. Si hay dato real de ML, aparece debajo." onclick="setSortP('recib')">Recib. ML${sIcoP('recib')}</th><th class="r" style="color:var(--g);cursor:pointer" onclick="setSortP('mp')">Margen $${sIcoP('mp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('mpct')">Margen %${sIcoP('mpct')}</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th class="sk" style="cursor:pointer" onclick="setSortP('sku')">SKU${sIcoP('sku')}</th><th style="cursor:pointer" onclick="setSortP('mla')">MLA${sIcoP('mla')}</th><th style="cursor:pointer" onclick="setSortP('titulo')">Título${sIcoP('titulo')}</th><th class="r" style="cursor:pointer" onclick="setSortP('costo')">Costo c/IVA${sIcoP('costo')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio inicial / real" onclick="setSortP('pvp')">Precio inicial ✎${sIcoP('pvp')}</th><th class="r" style="background:var(--ybg);color:var(--yd);cursor:pointer" title="Precio promocional (opcional). Vacío = sin promo." onclick="setSortP('promo')">Precio promo ✎${sIcoP('promo')}</th><th style="cursor:pointer" title="Hasta cuándo dura la promoción vigente" onclick="setSortP('promohasta')">Promo hasta${sIcoP('promohasta')}</th><th class="r" style="cursor:pointer" onclick="setSortP('comm')">Com.ML${sIcoP('comm')}</th><th class="r" style="cursor:pointer" onclick="setSortP('imp')">Imp.${sIcoP('imp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('envio')">Envío${sIcoP('envio')}</th><th class="r" style="cursor:pointer" onclick="setSortP('total')">Total${sIcoP('total')}</th><th class="r" style="color:var(--o);cursor:pointer" title="Neto que te liquida ML al precio vigente: precio − comisión − cargo fijo − envío − déb/créd − IIBB. Si hay dato real de ML, aparece debajo." onclick="setSortP('recib')">Recib. ML${sIcoP('recib')}</th><th class="r" style="color:var(--g);cursor:pointer" onclick="setSortP('mp')">Margen $${sIcoP('mp')}</th><th class="r" style="cursor:pointer" onclick="setSortP('mpct')">Margen %${sIcoP('mpct')}</th><th title="Notas libres del producto (se guardan y sincronizan)">Observaciones</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>${pagerHtml(total,page,pages,"precios")}`
     }
@@ -1356,20 +1359,20 @@ function exportProds(){
 }
 function exportPricing(){
   const est=getEstruct(S.selMonth);
-  const d=[["Revisado","SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","AporteML$","TuCargo$","PrecioFinal","SinStock","Cuotas%","Envío","Uni/Mes","Comisión%","Comisión$","CargoFijo","Imp$","Insumos$","Estructural","TotalCosto","Ganancia$","Margen%","PVPSugerido"]];
+  const d=[["Revisado","SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","AporteML$","TuCargo$","PrecioFinal","SinStock","Cuotas%","Envío","Uni/Mes","Comisión%","Comisión$","CargoFijo","Imp$","Insumos$","Estructural","TotalCosto","Ganancia$","Margen%","PVPSugerido","Observaciones"]];
   S.prods.forEach(p=>{
     const c=getPConf(p.sku,p);const r=calcP({costoConIva:p.costoConIva,pvp:c.effPvp,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipEff,estruct:est,useShip:c.useShip,cuotaRt:c.cuotaRt});
     const sug=suggestPVP({costoConIva:p.costoConIva,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipBase,estruct:est,target:S.targetMargin,mode:c.mode});
-    d.push([S.checked[p.sku]?"TRUE":"FALSE",p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.aporteML?Math.round(c.aporteML):"",c.miCargo?Math.round(c.miCargo):"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",c.cuotaRt||"",c.shipEff,c.units,c.cat.c,r?+r.comm.toFixed(0):"",r?+r.fxB.toFixed(0):"",r?+(r.dc+r.iibb).toFixed(0):"",r?+r.ins.toFixed(0):"",+est.toFixed(0),r?+r.tot.toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):"",sug||""]);
+    d.push([S.checked[p.sku]?"TRUE":"FALSE",p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.aporteML?Math.round(c.aporteML):"",c.miCargo?Math.round(c.miCargo):"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",c.cuotaRt||"",c.shipEff,c.units,c.cat.c,r?+r.comm.toFixed(0):"",r?+r.fxB.toFixed(0):"",r?+(r.dc+r.iibb).toFixed(0):"",r?+r.ins.toFixed(0):"",+est.toFixed(0),r?+r.tot.toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):"",sug||"",c.obs||""]);
   });
   dlXlsx(d,"GH_Pricing_"+S.selMonth);
 }
 function exportPrecios(){
   const est=getEstruct(S.selMonth);
-  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","AporteML$","TuCargo$","PrecioFinal","SinStock","Cuotas%","Com.ML$","Imp$","Envío","TotalCosto","RecibisML","Margen$","Margen%"]];
+  const d=[["SKU","MLA","Título","Costo c/IVA","PVP","PrecioPromo","PromoCofinML","MLPct","AporteML$","TuCargo$","PrecioFinal","SinStock","Cuotas%","Com.ML$","Imp$","Envío","TotalCosto","RecibisML","Margen$","Margen%","Observaciones"]];
   S.prods.filter(p=>S.checked[p.sku]||getPConf(p.sku,p).sinStock).forEach(p=>{
     const c=getPConf(p.sku,p);const r=calcP({costoConIva:p.costoConIva,pvp:c.effPvp,commAllIn:c.cat.c,insRt:c.insRt,ship:c.shipEff,estruct:est,useShip:c.useShip,cuotaRt:c.cuotaRt});
-    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.aporteML?Math.round(c.aporteML):"",c.miCargo?Math.round(c.miCargo):"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",c.cuotaRt||"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+(c.effPvp-r.comm-r.fxB-(c.useShip?nv(c.shipEff):0)-r.dc-r.iibb).toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):""]);
+    d.push([p.sku,p.mla||"",p.titulo,p.costoConIva,c.pvp,c.pPromo||"",c.pPromoCofin?"Sí":"",c.pMlPct||"",c.aporteML?Math.round(c.aporteML):"",c.miCargo?Math.round(c.miCargo):"",c.pFinal!=null?Math.round(c.pFinal):"",c.sinStock?"Sí":"",c.cuotaRt||"",r?+r.comm.toFixed(0):"",r?+(r.dc+r.iibb+r.ins).toFixed(0):"",c.shipEff,r?+r.tot.toFixed(0):"",r?+(c.effPvp-r.comm-r.fxB-(c.useShip?nv(c.shipEff):0)-r.dc-r.iibb).toFixed(0):"",r?+r.m$.toFixed(0):"",r?+r.mPct.toFixed(2):"",c.obs||""]);
   });
   dlXlsx(d,"GH_PreciosActuales");
 }
