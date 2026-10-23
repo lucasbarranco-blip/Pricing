@@ -985,7 +985,7 @@ function renderPrecios(){
   el.innerHTML=`<div class="card">
     <div class="card-hdr">
       <div class="card-title"><i class="ti ti-circle-check"></i> Precios Actuales — ${allChk.length} productos aprobados</div>
-      <div class="flex">${srchBar("precios")}${pubSelect()}<button onclick="exportPrecios()"><i class="ti ti-download"></i> Exportar</button>${allChk.length>0?`<button class="br" onclick="clearPrecios()"><i class="ti ti-trash"></i> Limpiar</button>`:""}</div>
+      <div class="flex">${srchBar("precios")}${pubSelect()}<label style="cursor:pointer"><input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importPromosML(event)"><button onclick="this.previousElementSibling.click()" title="Recuperar/actualizar los precios promo desde el Excel de Publicaciones de ML (columna 'Precio con descuento'). Matchea por MLA o SKU."><i class="ti ti-upload"></i> Importar promos ML</button></label><button onclick="exportPrecios()"><i class="ti ti-download"></i> Exportar</button>${allChk.length>0?`<button class="br" onclick="clearPrecios()"><i class="ti ti-trash"></i> Limpiar</button>`:""}</div>
     </div>
     ${allChk.length===0
       ?`<div style="text-align:center;padding:40px;color:var(--txt3)"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;opacity:.3"></i>Tildá productos en Pricing &amp; P&amp;L para aprobarlos.</div>`
@@ -1259,6 +1259,49 @@ function rerenderTab(){S.tab==="precios"?renderPrecios():renderPricing();}
 function toggleChk(sku,val){S.checked={...S.checked,[sku]:val};sv("gh_checked",S.checked);render()}
 function removeFromPrecios(sku){S.checked={...S.checked,[sku]:false};sv("gh_checked",S.checked);if(S.pConf[sku]&&S.pConf[sku].sinStock){S.pConf={...S.pConf,[sku]:{...S.pConf[sku],sinStock:false}};sv("gh_pconf",S.pConf);}render()}
 function clearPrecios(){if(!confirm("¿Quitar todos?"))return;S.checked={};sv("gh_checked",S.checked);render()}
+// Recupera/actualiza precios promo desde el Excel de Publicaciones de ML (columna "Precio con descuento"). Matchea por MLA o SKU. No toca aprobados.
+function importPromosML(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=evt=>{
+    let wb;try{wb=XLSX.read(evt.target.result,{type:"binary"});}catch(err){alert("No pude leer el archivo.");return;}
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    if(data.length<2){alert("Archivo vacío.");return;}
+    const hdr=data[0].map(h=>String(h).toLowerCase());
+    const fi=ns=>{for(const n of ns){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i}return-1};
+    const cMla=fi(["mla","publicac","# de public","codigo de publicacion"]);
+    const cSku=fi(["sku","codigo universal","código universal","cod. universal"]);
+    const cDesc=fi(["precio con descuento","con descuento","precio promocional","precio de oferta","precio oferta"]);
+    const cPrecio=fi(["precio"]);
+    if(cDesc<0){alert("No encontré una columna de precio con descuento / promocional en el archivo.");return;}
+    const parse=v=>{let s=String(v).replace(/[$\s]/g,"");if(s.indexOf(",")>=0&&s.indexOf(".")>=0)s=s.replace(/\./g,"").replace(",",".");else if(s.indexOf(",")>=0)s=s.replace(",",".");const n=parseFloat(s);return isNaN(n)?0:Math.round(n);};
+    const mlaKey=s=>String(s||"").replace(/[^0-9]/g,"");
+    const byMla={},bySku={};
+    S.prods.forEach(p=>{const mk=mlaKey(p.mla);if(mk)byMla[mk]=p.sku;if(p.sku)bySku[String(p.sku).trim().toUpperCase()]=p.sku;});
+    let set=0,nomatch=0,sinDesc=0;
+    data.slice(1).forEach(row=>{
+      if(!row||!row.some(c=>c!==""))return;
+      const mk=cMla>=0?mlaKey(row[cMla]):"";
+      const sk=cSku>=0?String(row[cSku]||"").trim().toUpperCase():"";
+      const target=(mk&&byMla[mk])||(sk&&bySku[sk])||null;
+      if(!target){nomatch++;return;}
+      const desc=parse(row[cDesc]);
+      const precio=cPrecio>=0?parse(row[cPrecio]):0;
+      if(desc>0&&(precio===0||desc<precio)){
+        const cur=S.pConf[target]||{};
+        const nx={...cur,pPromo:desc};
+        if(precio>0&&!(nv(cur.pvp)>0))nx.pvp=precio; // si no hay PVP cargado, uso el Precio de lista
+        S.pConf={...S.pConf,[target]:nx};
+        set++;
+      }else{sinDesc++;}
+    });
+    sv("gh_pconf",S.pConf);
+    alert(`Promos importadas: ${set}.\nFilas sin descuento (ignoradas): ${sinDesc}.\nSin coincidencia MLA/SKU: ${nomatch}.`);
+    rerenderTab();
+  };
+  r.readAsBinaryString(file);e.target.value="";
+}
 function uTN(sku,k,v){S.tn={...S.tn,[sku]:{...(S.tn[sku]||{}),[k]:v}};sv("gh_tn",S.tn)}
 
 /* ════════════════════════════════
@@ -1460,6 +1503,33 @@ const calcCoFund=(prod,conf,promo,est)=>{
 const SYNC_KEYS=["gh_prods","gh_cats","gh_cffields","gh_tiers","gh_cuotas","gh_ship","gh_shipbysku","gh_ins","gh_monthly","gh_pconf","gh_tn","gh_checked","gh_flex"];
 // Claves tipo mapa (objeto por SKU): se FUSIONAN, nunca se reemplazan en bloque, para no borrar datos locales (ej. precios promo).
 const MAP_KEYS=["gh_pconf","gh_checked","gh_tn","gh_shipbysku","gh_monthly"];
+// ── Fusión profunda para no perder datos cargados (precios promo, observaciones, etc.) ──
+// El bug anterior fusionaba a nivel de SKU: un objeto de SKU sin pPromo pisaba al que SÍ lo tenía.
+// Ahora se fusiona CAMPO por campo: un valor cargado nunca lo pisa uno vacío.
+const _sigV=x=>!(x===undefined||x===null||x===""||(typeof x==="number"&&(x===0||isNaN(x))));
+function _mergeEntry(base,over,overWins){
+  if(!base||typeof base!=="object"||Array.isArray(base))return over!==undefined?over:base;
+  if(!over||typeof over!=="object"||Array.isArray(over))return base!==undefined?base:over;
+  const out={...base};
+  for(const f in over){
+    const bv=base[f],ov=over[f];
+    if(_sigV(ov)&&!_sigV(bv))out[f]=ov;        // el que tiene valor gana al vacío
+    else if(!_sigV(ov)&&_sigV(bv))out[f]=bv;
+    else out[f]=overWins?ov:bv;                 // ambos con (o sin) valor: decide la dirección
+  }
+  return out;
+}
+function mergeMap(base,over,overWins){
+  const out=(base&&typeof base==="object"&&!Array.isArray(base))?{...base}:{};
+  const ov=(over&&typeof over==="object"&&!Array.isArray(over))?over:{};
+  for(const k in ov){
+    const bv=out[k],nvv=ov[k];
+    if(bv&&nvv&&typeof bv==="object"&&typeof nvv==="object"&&!Array.isArray(bv)&&!Array.isArray(nvv))out[k]=_mergeEntry(bv,nvv,overWins);
+    else if(bv!==undefined&&nvv!==undefined)out[k]=overWins?nvv:bv;
+    else out[k]=nvv!==undefined?nvv:bv;
+  }
+  return out;
+}
 let _syncMuted=true,_psT={},_upFirst=[],_mergedPush=[];
 function syncMark(ok){const d=document.getElementById("sdot");if(!d)return;d.title=ok?"Sincronizado en la nube":"Sin conexión con Supabase (guardado solo local)";d.style.background=ok?"":"var(--dn)";}
 const pushStateRemote=(k,v)=>{
@@ -1482,7 +1552,7 @@ async function loadStateRemote(){
     rows.forEach(row=>{if(!row||SYNC_KEYS.indexOf(row.k)<0)return;if(row.updated_at)_lastSyncTs[row.k]=row.updated_at;if(row.v==null)return;seen.add(row.k);try{
       if(MAP_KEYS.indexOf(row.k)>=0&&row.v&&typeof row.v==="object"&&!Array.isArray(row.v)){
         const loc=ld(row.k,null);const hasLoc=loc&&typeof loc==="object"&&Object.keys(loc).length>0;
-        const merged=hasLoc?{...row.v,...loc}:row.v; // al abrir, lo LOCAL gana: nunca se pierde lo tuyo
+        const merged=hasLoc?mergeMap(row.v,loc,true):row.v; // al abrir: fusión profunda, lo cargado nunca se pierde (ni local ni nube)
         localStorage.setItem(row.k,JSON.stringify(merged));
         if(hasLoc)_mergedPush.push(row.k); // subir la unión para que la nube tenga tus datos locales
       }else{localStorage.setItem(row.k,JSON.stringify(row.v));}
@@ -1505,7 +1575,7 @@ function syncUnmute(){
 let _lastSyncTs={};
 function applyRemoteKey(k,v){
   // Para claves-mapa, fusionar (el remoto gana por SKU, pero se conservan los SKU que solo están local).
-  try{if(MAP_KEYS.indexOf(k)>=0&&v&&typeof v==="object"&&!Array.isArray(v)){const loc=ld(k,null);if(loc&&typeof loc==="object")v={...loc,...v};}localStorage.setItem(k,JSON.stringify(v))}catch(e){}
+  try{if(MAP_KEYS.indexOf(k)>=0&&v&&typeof v==="object"&&!Array.isArray(v)){const loc=ld(k,null);if(loc&&typeof loc==="object")v=mergeMap(loc,v,true);}localStorage.setItem(k,JSON.stringify(v))}catch(e){}
   if(k==="gh_prods"&&Array.isArray(v)&&v.length){S.prods=v;S.nextId=Math.max(0,...S.prods.map(p=>p.id))+1;}
   else if(k==="gh_pconf"&&v)S.pConf=v;
   else if(k==="gh_shipbysku")S.shipBySku={...DEFAULT_SHIP_BYSKU,...(v||{})};
